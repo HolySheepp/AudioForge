@@ -4,6 +4,7 @@ import { join, extname } from 'path'
 import { probeFile } from './ffmpeg/probe'
 import { getWaveform } from './waveform'
 import { ensurePreview } from './preview'
+import { hapticTick, hapticTest } from './haptics'
 import { ALL_EXTS } from '../shared/types'
 import { detectHardware } from './ffmpeg/hardware'
 import { getSettings, updateSettings } from './settings'
@@ -58,6 +59,10 @@ export function registerIpc(getWindow: GetWindow): void {
   ipcMain.handle('jobs:cancel', (_e, jobId: string) => queue.cancel(jobId))
   ipcMain.handle('jobs:cancelAll', () => queue.cancelAll())
   ipcMain.handle('jobs:hasActive', () => queue.hasActiveWork())
+
+  // 觸覺回饋:tick 走 send(fire-and-forget,不等回覆);測試走 invoke
+  ipcMain.on('haptic:tick', () => hapticTick())
+  ipcMain.handle('haptic:test', () => hapticTest())
 
   ipcMain.handle('waveform:get', (_e, path: string, mtimeMs: number) => getWaveform(path, mtimeMs))
 

@@ -6,6 +6,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
   const settings = useApp((s) => s.settings)
   const hardware = useApp((s) => s.hardware)
   const saveSettings = useApp((s) => s.saveSettings)
+  const toast = useApp((s) => s.toast)
   if (!settings) return null
 
   return (
@@ -87,6 +88,41 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
             <option value="off">{t('settings.hwAccel.off')}</option>
           </select>
         </label>
+
+        <label className="check-inline">
+          <input
+            type="checkbox"
+            checked={settings.haptics}
+            onChange={(e) => void saveSettings({ haptics: e.target.checked })}
+          />
+          {t('settings.haptics')}
+        </label>
+        {settings.haptics && (
+          <>
+            <div className="field field-row">
+              <span>{t('settings.haptics.waveform')}</span>
+              <select
+                value={settings.hapticWaveform}
+                onChange={(e) => void saveSettings({ hapticWaveform: Number(e.target.value) })}
+              >
+                {Array.from({ length: 16 }, (_, i) => (
+                  <option key={i} value={i}>{i}</option>
+                ))}
+              </select>
+              <button
+                className="mini-btn"
+                onClick={() => {
+                  void window.api.hapticTest().then((ok) => {
+                    toast(t(ok ? 'toast.hapticOk' : 'toast.hapticFail'))
+                  })
+                }}
+              >
+                {t('settings.haptics.test')}
+              </button>
+            </div>
+            <p className="panel-hint">{t('settings.haptics.hint')}</p>
+          </>
+        )}
 
         <div className="settings-hw">
           <div>

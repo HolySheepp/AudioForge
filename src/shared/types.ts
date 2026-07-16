@@ -79,6 +79,10 @@ export interface Settings {
   outputDir: string
   concurrency: number
   hwAccel: 'auto' | 'off'
+  /** 旋鈕棘輪觸覺回饋(MX Master 4 + HapticWeb 外掛) */
+  haptics: boolean
+  /** 觸覺波形索引(0–15) */
+  hapticWaveform: number
   /** 各功能面板上次使用的參數 */
   toolParams: Record<string, Record<string, unknown>>
   /** 各旋鈕的棘輪步進選擇(key = 旋鈕 id) */
@@ -92,6 +96,8 @@ export const DEFAULT_SETTINGS: Settings = {
   outputDir: '',
   concurrency: 3,
   hwAccel: 'auto',
+  haptics: true,
+  hapticWaveform: 0,
   toolParams: {},
   knobSteps: {}
 }

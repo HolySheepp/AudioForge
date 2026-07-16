@@ -86,6 +86,8 @@ export function Knob({
       onChange(v)
       if (hitEdge || Math.abs(inertiaVel.current) < step * 0.8) {
         onChange(snap(v))
+        // 慣性結束、重新咬合棘輪 → 補一發觸覺 tick
+        window.api.hapticTick()
         stopInertia()
         return
       }
@@ -119,7 +121,9 @@ export function Knob({
     const rawDetents = dy / PX_PER_DETENT
     const whole = Math.round(rawDetents)
     setTension(rawDetents - whole) // 齒間張力,做微小的視覺旋轉
-    onChange(clamp(d.startValue + whole * step))
+    const next = clamp(d.startValue + whole * step)
+    if (next !== valueRef.current) window.api.hapticTick() // 跨齒 → 觸覺回饋
+    onChange(next)
   }
 
   const onPointerUp = (): void => {
@@ -145,7 +149,9 @@ export function Knob({
 
   const onWheel = (e: React.WheelEvent): void => {
     stopInertia()
-    onChange(snap(valueRef.current + (e.deltaY < 0 ? step : -step)))
+    const next = snap(valueRef.current + (e.deltaY < 0 ? step : -step))
+    if (next !== valueRef.current) window.api.hapticTick()
+    onChange(next)
   }
 
   const beginEdit = (): void => {

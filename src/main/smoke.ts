@@ -12,6 +12,7 @@ import { probeFile } from './ffmpeg/probe'
 import { queue } from './queue'
 import { registerAllTools } from './tools'
 import { parseEbur128Summary } from './tools/common'
+import { hapticTest } from './haptics'
 import type { JobSpec, JobUpdate } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -169,6 +170,10 @@ export async function runSmoke(): Promise<void> {
     check('mt mix single stereo track', info.audioStreams.length === 1 && info.audioStreams[0].channels === 2)
     check('mt mix video copy', info.videoCodec === srcInfo.videoCodec)
   }
+
+  // 資訊性檢查(不列入失敗):HapticWeb 服務是否可達、發送鏈是否正常
+  const hapticOk = await hapticTest()
+  console.log(`INFO haptic service reachable: ${hapticOk}`)
 
   console.log(failures === 0 ? 'SMOKE_ALL_PASS' : `SMOKE_FAILURES=${failures}`)
   app.exit(failures === 0 ? 0 : 1)

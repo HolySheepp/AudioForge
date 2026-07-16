@@ -29,6 +29,10 @@ const api = {
     return () => ipcRenderer.removeListener('jobs:update', listener)
   },
 
+  /** 旋鈕棘輪跨齒 → 觸覺 tick(fire-and-forget) */
+  hapticTick: (): void => ipcRenderer.send('haptic:tick'),
+  hapticTest: (): Promise<boolean> => ipcRenderer.invoke('haptic:test'),
+
   getWaveform: (path: string, mtimeMs: number): Promise<number[]> =>
     ipcRenderer.invoke('waveform:get', path, mtimeMs),
   ensurePreview: (path: string): Promise<{ url: string; kind: 'video' | 'audio'; isProxy: boolean }> =>

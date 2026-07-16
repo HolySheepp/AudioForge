@@ -1,0 +1,3 @@
+如果用戶在用有Haptic Feedback的滑鼠(例如mx master 4)，則在操作棘輪時觸發haptic feedback震動
+
+希望有OBS操作界面的那種可以自行移動、排列、隱藏、顯示docks的功能

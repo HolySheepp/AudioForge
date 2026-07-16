@@ -1,0 +1,100 @@
+import { useApp } from '../store'
+import { useT } from '../hooks/useT'
+import { mergedParams, MULTITRACK_TRACK_DEFAULT, type MultitrackParams } from '../features/params'
+import type { JobSpec } from '../../../shared/types'
+
+let jobSeq = 1
+
+export function StatusBar(): React.JSX.Element {
+  const t = useT()
+  const tool = useApp((s) => s.tool)
+  const source = useApp((s) => s.source)
+  const settings = useApp((s) => s.settings)
+  const hardware = useApp((s) => s.hardware)
+  const saveSettings = useApp((s) => s.saveSettings)
+  const startJobs = useApp((s) => s.startJobs)
+  const cancelAll = useApp((s) => s.cancelAll)
+  const toast = useApp((s) => s.toast)
+
+  const checked = source.filter((it) => it.checked && it.info)
+  const anyRunning = source.some((it) => it.status === 'waiting' || it.status === 'running')
+
+  const start = (): void => {
+    if (!settings) return
+    if (checked.length === 0) {
+      toast(t('toast.noChecked'))
+      return
+    }
+
+    const params = mergedParams<Record<string, unknown>>(tool, settings.toolParams)
+    let candidates = checked
+
+    if (tool === 'replace') {
+      candidates = checked.filter((it) => it.info!.hasVideo)
+      if (candidates.some((it) => !it.replaceAudioPath)) {
+        toast(t('param.replace.needAudio'))
+        return
+      }
+    }
+    if (tool === 'multitrack') {
+      candidates = checked.filter((it) => it.info!.hasVideo && it.info!.audioStreams.length > 0)
+      if (candidates.length === 0) {
+        toast(t('param.mt.needVideo'))
+        return
+      }
+      // 依第一個檔案的軌數補滿每軌設定
+      const mt = params as unknown as MultitrackParams
+      const n = candidates[0].info!.audioStreams.length
+      mt.tracks = Array.from({ length: n }, (_, i) => mt.tracks[i] ?? MULTITRACK_TRACK_DEFAULT)
+    }
+    if (tool === 'extract' || tool === 'analysis' || tool === 'normalize' || tool === 'convert') {
+      candidates = checked.filter((it) => it.info!.audioStreams.length > 0)
+    }
+    if (candidates.length === 0) {
+      toast(t('toast.noChecked'))
+      return
+    }
+
+    const specs: JobSpec[] = candidates.map((it) => ({
+      jobId: `j${Date.now()}-${jobSeq++}`,
+      itemId: it.id,
+      tool,
+      path: it.path,
+      params: { ...params, replaceAudioPath: it.replaceAudioPath }
+    }))
+    void startJobs(specs)
+    toast(t('toast.jobsStarted', { n: specs.length }))
+  }
+
+  return (
+    <footer className="statusbar">
+      <span className="statusbar-info">
+        {t('statusbar.filesSelected', { sel: checked.length, total: source.length })}
+      </span>
+      <span className="statusbar-hw" title={hardware?.gpuNames.join(', ') ?? ''}>
+        {hardware?.chosenEncoder && settings?.hwAccel !== 'off'
+          ? t('statusbar.hwOn', { name: hardware.chosenEncoder })
+          : t('statusbar.hwOff')}
+      </span>
+      <label className="statusbar-conc">
+        {t('statusbar.concurrency')}
+        <select
+          value={settings?.concurrency ?? 3}
+          onChange={(e) => void saveSettings({ concurrency: Number(e.target.value) })}
+        >
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <option key={n} value={n}>{n}</option>
+          ))}
+        </select>
+      </label>
+      {anyRunning && (
+        <button className="mini-btn danger" onClick={cancelAll}>
+          {t('common.cancelAll')}
+        </button>
+      )}
+      <button className="start-btn" onClick={start}>
+        ▶ {t('common.start')}
+      </button>
+    </footer>
+  )
+}

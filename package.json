@@ -1,0 +1,33 @@
+{
+  "name": "audioforge",
+  "version": "0.1.0",
+  "description": "AudioForge — 精簡高效的音訊批次處理工作站(簡化版 Shutter Encoder)",
+  "main": "./out/main/index.js",
+  "author": "francishuang",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "dist": "electron-vite build && electron-builder",
+    "dist:dir": "electron-vite build && electron-builder --dir",
+    "setup:ffmpeg": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-ffmpeg.ps1",
+    "smoke": "electron-vite build && set AUDIOFORGE_SMOKE=1&& electron ."
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-vite": "^3.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}

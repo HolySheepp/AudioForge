@@ -1,0 +1,8 @@
+node_modules/
+out/
+release/
+.electron-cache/
+*.log
+
+# FFmpeg 二進位檔超過 GitHub 100MB 上限,clone 後執行 npm run setup:ffmpeg 取得
+bin/*.exe

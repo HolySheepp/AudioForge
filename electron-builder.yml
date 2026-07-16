@@ -1,0 +1,26 @@
+appId: com.francishuang.audioforge
+productName: AudioForge
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**
+extraResources:
+  - from: bin
+    to: bin
+    filter:
+      - "**/*"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: AudioForge
+electronDownload:
+  cache: .electron-cache
+npmRebuild: false

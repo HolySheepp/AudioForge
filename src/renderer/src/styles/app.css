@@ -1,3 +1,18 @@
+/* ===== 圖示 ===== */
+.icon {
+  vertical-align: -2px;
+  flex-shrink: 0;
+}
+.mini-btn,
+.start-btn,
+.icon-btn,
+.row-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
 /* ===== 版面 ===== */
 .app {
   display: flex;
@@ -38,7 +53,8 @@
   gap: 8px;
 }
 .header-logo {
-  font-size: 18px;
+  display: flex;
+  color: var(--accent);
 }
 .header h1 {
   font-size: 16px;
@@ -97,7 +113,11 @@
   border-color: var(--accent);
 }
 .sidebar-icon {
-  font-size: 17px;
+  display: flex;
+  color: var(--text-dim);
+}
+.sidebar-item.active .sidebar-icon {
+  color: var(--accent);
 }
 .sidebar-text {
   display: flex;
@@ -164,7 +184,6 @@
   color: var(--text-dim);
 }
 .pane-empty-icon {
-  font-size: 30px;
   opacity: 0.5;
 }
 .pane-empty small {

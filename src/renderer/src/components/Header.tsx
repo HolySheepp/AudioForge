@@ -1,5 +1,6 @@
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
+import { IconAutoTheme, IconGear, IconLogo, IconMoon, IconSun } from './icons'
 
 export function Header({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
   const t = useT()
@@ -8,13 +9,19 @@ export function Header({ onOpenSettings }: { onOpenSettings: () => void }): Reac
   if (!settings) return <header className="header" />
 
   const themes = ['light', 'dark', 'system'] as const
-  const themeIcons = { light: '☀', dark: '☾', system: '◐' }
+  const themeIcons = {
+    light: <IconSun />,
+    dark: <IconMoon />,
+    system: <IconAutoTheme />
+  }
   const nextTheme = themes[(themes.indexOf(settings.theme) + 1) % themes.length]
 
   return (
     <header className="header">
       <div className="header-brand">
-        <span className="header-logo">⚒</span>
+        <span className="header-logo">
+          <IconLogo />
+        </span>
         <h1>{t('app.name')}</h1>
       </div>
       <div className="header-actions">
@@ -33,7 +40,7 @@ export function Header({ onOpenSettings }: { onOpenSettings: () => void }): Reac
           {themeIcons[settings.theme]}
         </button>
         <button className="icon-btn" onClick={onOpenSettings} title={t('settings.title')}>
-          ⚙
+          <IconGear />
         </button>
       </div>
     </header>

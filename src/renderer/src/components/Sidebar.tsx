@@ -1,14 +1,22 @@
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
 import type { ToolId } from '../../../shared/types'
+import {
+  IconAnalysis,
+  IconConvert,
+  IconExtract,
+  IconMultitrack,
+  IconNormalize,
+  IconReplace
+} from './icons'
 
-const TOOLS: { id: ToolId; icon: string }[] = [
-  { id: 'analysis', icon: '📈' },
-  { id: 'normalize', icon: '🎚' },
-  { id: 'replace', icon: '🔁' },
-  { id: 'extract', icon: '📤' },
-  { id: 'convert', icon: '🔄' },
-  { id: 'multitrack', icon: '🎛' }
+const TOOLS: { id: ToolId; icon: React.JSX.Element }[] = [
+  { id: 'analysis', icon: <IconAnalysis /> },
+  { id: 'normalize', icon: <IconNormalize /> },
+  { id: 'replace', icon: <IconReplace /> },
+  { id: 'extract', icon: <IconExtract /> },
+  { id: 'convert', icon: <IconConvert /> },
+  { id: 'multitrack', icon: <IconMultitrack /> }
 ]
 
 export function Sidebar(): React.JSX.Element {

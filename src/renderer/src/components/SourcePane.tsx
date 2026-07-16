@@ -3,6 +3,7 @@ import { useApp, type SourceItem } from '../store'
 import { useT } from '../hooks/useT'
 import { fmtDuration, fmtDb } from '../utils/format'
 import { AUDIO_EXTS } from '../../../shared/types'
+import { IconDrop, IconNote, IconStop, IconWarn } from './icons'
 
 export function SourcePane(): React.JSX.Element {
   const t = useT()
@@ -25,7 +26,9 @@ export function SourcePane(): React.JSX.Element {
       <div className="pane-body">
         {source.length === 0 ? (
           <div className="pane-empty">
-            <span className="pane-empty-icon">⤵</span>
+            <span className="pane-empty-icon">
+              <IconDrop />
+            </span>
             <p>{t('source.empty')}</p>
             <small>{t('source.emptyHint')}</small>
           </div>
@@ -131,7 +134,9 @@ function SourceRow({
           />
         )}
         {item.note === 'downgradedAac' && (
-          <span className="row-note">⚠ {t('note.downgradedAac')}</span>
+          <span className="row-note">
+            <IconWarn /> {t('note.downgradedAac')}
+          </span>
         )}
         {item.analysis && (
           <span className="row-analysis">
@@ -174,7 +179,7 @@ function SourceRow({
             cancelItem(item.id)
           }}
         >
-          ⏹
+          <IconStop />
         </button>
       ) : (
         <button
@@ -205,7 +210,7 @@ function ReplacePicker({
       {value ? (
         <>
           <span className="row-replace-name" title={value}>
-            🎵 {value.split(/[\\/]/).pop()}
+            <IconNote /> {value.split(/[\\/]/).pop()}
           </span>
           <button className="row-x" onClick={() => onPick(null)}>✕</button>
         </>

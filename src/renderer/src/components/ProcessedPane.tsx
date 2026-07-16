@@ -1,6 +1,7 @@
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
 import { fmtDuration, fmtSize } from '../utils/format'
+import { IconArrowLeft, IconCheck, IconFolder } from './icons'
 
 export function ProcessedPane(): React.JSX.Element {
   const t = useT()
@@ -17,7 +18,7 @@ export function ProcessedPane(): React.JSX.Element {
         <h2>{t('processed.title')}</h2>
         <div className="pane-tools">
           <button className="mini-btn" onClick={moveAllToSource} disabled={!processed.length}>
-            ⬅ {t('processed.moveAllToSource')}
+            <IconArrowLeft size={12} /> {t('processed.moveAllToSource')}
           </button>
           <button className="mini-btn danger" onClick={clearProcessed} disabled={!processed.length}>
             {t('processed.clear')}
@@ -27,7 +28,9 @@ export function ProcessedPane(): React.JSX.Element {
       <div className="pane-body">
         {processed.length === 0 ? (
           <div className="pane-empty">
-            <span className="pane-empty-icon">✓</span>
+            <span className="pane-empty-icon">
+              <IconCheck />
+            </span>
             <p>{t('processed.empty')}</p>
           </div>
         ) : (
@@ -55,7 +58,7 @@ export function ProcessedPane(): React.JSX.Element {
                   moveToSource(item.id)
                 }}
               >
-                ⬅
+                <IconArrowLeft />
               </button>
               <button
                 className="mini-btn"
@@ -65,7 +68,7 @@ export function ProcessedPane(): React.JSX.Element {
                   void window.api.showInFolder(item.path)
                 }}
               >
-                📂
+                <IconFolder />
               </button>
             </div>
           ))

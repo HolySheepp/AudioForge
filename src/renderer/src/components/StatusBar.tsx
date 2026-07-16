@@ -2,6 +2,7 @@ import { useApp } from '../store'
 import { useT } from '../hooks/useT'
 import { mergedParams, MULTITRACK_TRACK_DEFAULT, type MultitrackParams } from '../features/params'
 import type { JobSpec } from '../../../shared/types'
+import { IconPlay } from './icons'
 
 let jobSeq = 1
 
@@ -93,7 +94,7 @@ export function StatusBar(): React.JSX.Element {
         </button>
       )}
       <button className="start-btn" onClick={start}>
-        ▶ {t('common.start')}
+        <IconPlay /> {t('common.start')}
       </button>
     </footer>
   )

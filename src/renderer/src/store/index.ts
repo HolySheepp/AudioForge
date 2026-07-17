@@ -97,11 +97,12 @@ export const useApp = create<AppState>((set, get) => ({
     window.api.listSounds().then((sounds) => set({ sounds }))
   },
 
-  /** 播放提示音;不指定 id 時用設定選的(未選則清單第一個) */
+  /** 播放提示音;不指定 id 時用設定選的(未選則清單第一個;'none' 不播放) */
   playSound: (soundId) => {
     const { sounds, settings } = get()
     if (!sounds.length) return
     const id = soundId ?? settings?.soundId
+    if (id === 'none') return
     const sound = sounds.find((s) => s.id === id) ?? sounds[0]
     const audio = new Audio(toMediaUrl(sound.path))
     void audio.play().catch(() => undefined)
@@ -251,8 +252,12 @@ function applyJobUpdate(
     })
   }))
 
-  // 整批任務跑完的那一刻(而非每個檔案完成)播一次提示音
-  if (wasActive && !hasActiveJobs(get().source) && get().settings?.soundEnabled) {
+  const timing = get().settings?.soundTiming ?? 'perFile'
+  if (timing === 'perFile') {
+    // 每個檔案成功完成各響一次(失敗/取消不響)
+    if (u.status === 'done') get().playSound()
+  } else if (wasActive && !hasActiveJobs(get().source)) {
+    // 整批任務跑完的那一刻響一次
     get().playSound()
   }
 

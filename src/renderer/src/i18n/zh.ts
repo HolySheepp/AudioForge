@@ -131,10 +131,13 @@ export const zh = {
   'settings.accent.amber': '琥珀',
   'settings.accent.rose': '玫瑰',
 
-  'settings.sound': '完成時播放音效',
   'settings.sound.pick': '音效',
   'settings.sound.test': '試聽',
-  'settings.sound.none': '(找不到音效檔)',
+  'settings.sound.noneOption': '無',
+  'settings.sound.empty': '(找不到音效檔)',
+  'settings.sound.timing': '播放時機',
+  'settings.sound.timing.perFile': '每個檔案完成',
+  'settings.sound.timing.batch': '全部完成才播放',
 
   'settings.haptics': '旋鈕觸覺回饋',
   'settings.haptics.hint': '需要 MX Master 4 滑鼠 + Logi Options+ 的 HapticWeb 外掛',

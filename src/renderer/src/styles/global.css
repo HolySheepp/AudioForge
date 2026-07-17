@@ -36,10 +36,10 @@
    全部沿用預設藍 hsl(220,100%,65%) / hsl(220,75%,53%) 的明度與飽和度骨架,只換色相,
    確保任一副色與整體設計語彙一致。 */
 :root[data-theme='dark'][data-accent='green'] {
-  --accent: #42d78c;
+  --accent: #42d65a;
 }
 :root[data-theme='light'][data-accent='green'] {
-  --accent: #1b9859;
+  --accent: #229b36;
 }
 
 :root[data-theme='dark'][data-accent='purple'] {

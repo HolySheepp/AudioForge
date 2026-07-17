@@ -120,10 +120,13 @@ export const en: Record<I18nKey, string> = {
   'settings.accent.amber': 'Amber',
   'settings.accent.rose': 'Rose',
 
-  'settings.sound': 'Play sound when finished',
   'settings.sound.pick': 'Sound',
   'settings.sound.test': 'Preview',
-  'settings.sound.none': '(no sound files found)',
+  'settings.sound.noneOption': 'None',
+  'settings.sound.empty': '(no sound files found)',
+  'settings.sound.timing': 'Play when',
+  'settings.sound.timing.perFile': 'Each file finishes',
+  'settings.sound.timing.batch': 'All finish',
 
   'settings.haptics': 'Knob haptic feedback',
   'settings.haptics.hint': 'Requires an MX Master 4 + the HapticWeb plugin in Logi Options+',

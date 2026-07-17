@@ -98,10 +98,10 @@ export interface Settings {
   haptics: boolean
   /** 觸覺波形索引(0–15) */
   hapticWaveform: number
-  /** 佇列全部完成時播放提示音 */
-  soundEnabled: boolean
-  /** 選用的音效 id;空字串 = 用清單第一個 */
+  /** 選用的音效 id;空字串 = 用清單第一個;'none' = 不播放 */
   soundId: string
+  /** 播放時機:每個檔案完成一次 / 整批佇列完成一次 */
+  soundTiming: 'perFile' | 'batch'
   /** 各功能面板上次使用的參數 */
   toolParams: Record<string, Record<string, unknown>>
   /** 各旋鈕的棘輪步進選擇(key = 旋鈕 id) */
@@ -118,8 +118,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hwAccel: 'auto',
   haptics: true,
   hapticWaveform: 0,
-  soundEnabled: true,
   soundId: '',
+  soundTiming: 'perFile',
   toolParams: {},
   knobSteps: {}
 }

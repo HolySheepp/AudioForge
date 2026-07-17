@@ -672,7 +672,7 @@
   --swatch: #4f8cff;
 }
 .accent-swatch[data-accent-preview='green'] {
-  --swatch: #42d78c;
+  --swatch: #42d65a;
 }
 .accent-swatch[data-accent-preview='purple'] {
   --swatch: #ac86f9;
@@ -690,7 +690,7 @@
   --swatch: #2f6fe0;
 }
 :root[data-theme='light'] .accent-swatch[data-accent-preview='green'] {
-  --swatch: #1b9859;
+  --swatch: #229b36;
 }
 :root[data-theme='light'] .accent-swatch[data-accent-preview='purple'] {
   --swatch: #7342d7;

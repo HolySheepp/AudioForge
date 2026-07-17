@@ -96,40 +96,50 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
           </select>
         </label>
 
-        <label className="check-inline">
-          <input
-            type="checkbox"
-            checked={settings.soundEnabled}
-            onChange={(e) => void saveSettings({ soundEnabled: e.target.checked })}
-          />
-          {t('settings.sound')}
-        </label>
-        {settings.soundEnabled && (
-          <div className="field field-row">
+        {sounds.length === 0 ? (
+          <div className="field">
             <span>{t('settings.sound.pick')}</span>
-            {sounds.length === 0 ? (
-              <span className="panel-hint">{t('settings.sound.none')}</span>
-            ) : (
-              <>
-                <select
-                  value={settings.soundId || sounds[0].id}
-                  onChange={(e) => void saveSettings({ soundId: e.target.value })}
-                >
-                  {sounds.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {settings.language === 'zh' ? s.zhName : s.enName}
-                    </option>
-                  ))}
-                </select>
+            <span className="panel-hint">{t('settings.sound.empty')}</span>
+          </div>
+        ) : (
+          <>
+            <div className="field field-row">
+              <span>{t('settings.sound.pick')}</span>
+              <select
+                value={settings.soundId || sounds[0].id}
+                onChange={(e) => void saveSettings({ soundId: e.target.value })}
+              >
+                <option value="none">{t('settings.sound.noneOption')}</option>
+                {sounds.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {settings.language === 'zh' ? s.zhName : s.enName}
+                  </option>
+                ))}
+              </select>
+              {(settings.soundId || sounds[0].id) !== 'none' && (
                 <button
                   className="mini-btn"
                   onClick={() => playSound(settings.soundId || sounds[0].id)}
                 >
                   {t('settings.sound.test')}
                 </button>
-              </>
+              )}
+            </div>
+            {(settings.soundId || sounds[0].id) !== 'none' && (
+              <label className="field">
+                <span>{t('settings.sound.timing')}</span>
+                <select
+                  value={settings.soundTiming}
+                  onChange={(e) =>
+                    void saveSettings({ soundTiming: e.target.value as 'perFile' | 'batch' })
+                  }
+                >
+                  <option value="perFile">{t('settings.sound.timing.perFile')}</option>
+                  <option value="batch">{t('settings.sound.timing.batch')}</option>
+                </select>
+              </label>
             )}
-          </div>
+          </>
         )}
 
         <label className="field">

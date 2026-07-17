@@ -28,7 +28,6 @@ export const en: Record<I18nKey, string> = {
   'source.selectNone': 'Select None',
   'source.clearAll': 'Clear All',
   'source.empty': 'Drop files or folders here',
-  'source.emptyHint': 'Only paths are recorded — your files are never copied or modified',
   'source.remove': 'Remove',
   'source.probing': 'Reading…',
   'source.checkedCount': '{n} file(s) checked',

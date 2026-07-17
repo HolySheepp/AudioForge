@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
 
@@ -51,6 +52,7 @@ export function Knob({
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
   const [tension, setTension] = useState(0)
   const [freeSpin, setFreeSpin] = useState(false)
 
@@ -61,6 +63,7 @@ export function Knob({
   const valueRef = useRef(value)
   valueRef.current = value
   const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const clamp = (v: number): number => Math.min(max, Math.max(min, v))
   const snap = (v: number): number => clamp(Math.round(v / step) * step)
@@ -166,14 +169,21 @@ export function Knob({
     setEditing(false)
   }
 
-  // 右鍵選單:點外面關閉
+  // 右鍵選單:portal 到 body,不受面板捲軸/邊界裁切;點外面或捲動時關閉
   useEffect(() => {
     if (!menuOpen) return
     const close = (e: MouseEvent): void => {
-      if (!rootRef.current?.contains(e.target as Node)) setMenuOpen(false)
+      const t = e.target as Node
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setMenuOpen(false)
     }
+    const closeOnScroll = (): void => setMenuOpen(false)
     window.addEventListener('mousedown', close)
-    return () => window.removeEventListener('mousedown', close)
+    window.addEventListener('scroll', closeOnScroll, true)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('scroll', closeOnScroll, true)
+    }
   }, [menuOpen])
 
   const frac = (value - min) / (max - min)
@@ -192,6 +202,8 @@ export function Knob({
         onDoubleClick={beginEdit}
         onContextMenu={(e) => {
           e.preventDefault()
+          const r = rootRef.current!.getBoundingClientRect()
+          setMenuPos({ x: r.left + r.width / 2, y: r.bottom + 4 })
           setMenuOpen(true)
         }}
         title={t('knob.doubleClickHint')}
@@ -232,23 +244,29 @@ export function Knob({
           {unit ? <em>{unit}</em> : null}
         </span>
       )}
-      {menuOpen && (
-        <div className="knob-menu">
-          <span>{t('knob.step')}</span>
-          {stepOptions.map((s) => (
-            <button
-              key={s}
-              className={s === step ? 'active' : ''}
-              onClick={() => {
-                void saveSettings({ knobSteps: { [id]: s } })
-                setMenuOpen(false)
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+      {menuOpen &&
+        createPortal(
+          <div
+            className="knob-menu"
+            ref={menuRef}
+            style={{ left: menuPos.x, top: menuPos.y }}
+          >
+            <span>{t('knob.step')}</span>
+            {stepOptions.map((s) => (
+              <button
+                key={s}
+                className={s === step ? 'active' : ''}
+                onClick={() => {
+                  void saveSettings({ knobSteps: { [id]: s } })
+                  setMenuOpen(false)
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

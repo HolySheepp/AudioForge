@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from './store'
 import { Header } from './components/Header'
+import { OptionsBar } from './components/OptionsBar'
 import { Sidebar } from './components/Sidebar'
 import { SourcePane } from './components/SourcePane'
 import { ProcessedPane } from './components/ProcessedPane'
@@ -59,8 +60,9 @@ export default function App(): React.JSX.Element {
   return (
     <div className={`app${dragging ? ' dragging' : ''}`}>
       <Header />
+      <OptionsBar onOpenSettings={() => setSettingsOpen(true)} />
       <div className="app-mid">
-        <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
+        <Sidebar />
         <div className="app-center">
           <div className="panes">
             <SourcePane />

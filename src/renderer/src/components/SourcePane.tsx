@@ -30,7 +30,6 @@ export function SourcePane(): React.JSX.Element {
               <IconDrop />
             </span>
             <p>{t('source.empty')}</p>
-            <small>{t('source.emptyHint')}</small>
           </div>
         ) : (
           source.map((item) => (

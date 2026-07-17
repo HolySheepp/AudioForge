@@ -29,7 +29,6 @@ export const zh = {
   'source.selectNone': '全不選',
   'source.clearAll': '清除全部',
   'source.empty': '把檔案或資料夾拖到這裡',
-  'source.emptyHint': '只記錄路徑,不會複製或修改你的檔案',
   'source.remove': '移除',
   'source.probing': '讀取中…',
   'source.checkedCount': '已勾選 {n} 個檔案',

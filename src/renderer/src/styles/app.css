@@ -88,9 +88,14 @@
   font-weight: 600;
   letter-spacing: 0.5px;
 }
-.header-actions {
+/* ===== 選項列(標題列下方,語言/主題/設定靠右) ===== */
+.options-bar {
   display: flex;
+  justify-content: flex-end;
   gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 .icon-btn {
   width: 32px;
@@ -118,13 +123,6 @@
   background: var(--surface);
   border-right: 1px solid var(--border);
   overflow-y: auto;
-}
-.sidebar-footer {
-  margin-top: auto;
-  display: flex;
-  gap: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
 }
 .sidebar-item {
   display: flex;
@@ -210,10 +208,6 @@
 }
 .pane-empty-icon {
   opacity: 0.5;
-}
-.pane-empty small {
-  font-size: 11px;
-  opacity: 0.7;
 }
 
 /* ===== 檔案列 ===== */
@@ -565,11 +559,10 @@
   outline: none;
 }
 .knob-menu {
-  position: absolute;
-  top: 100%;
-  left: 50%;
+  /* portal 到 body:left/top 由 JS 依旋鈕實際位置算好(px),不受面板捲軸/邊界裁切 */
+  position: fixed;
   transform: translateX(-50%);
-  z-index: 30;
+  z-index: 200;
   display: flex;
   align-items: center;
   gap: 5px;

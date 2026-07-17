@@ -35,6 +35,8 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     title: 'AudioForge',
+    // 無邊框:原生標題列與 app 風格差太多;自製 header 兼任標題列(拖曳/視窗控制)
+    frame: false,
     autoHideMenuBar: true,
     backgroundColor: resolveThemeBg(getSettings().theme),
     // 打包版圖示已嵌入 exe;開發模式(npx electron .)額外指定,避免顯示 Electron 預設圖示
@@ -48,6 +50,13 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+
+  // 最大化狀態推給 renderer(切換「最大化/還原」按鈕圖示)
+  const sendMaximized = (v: boolean) => (): void => {
+    mainWindow?.webContents.send('window:maximized', v)
+  }
+  mainWindow.on('maximize', sendMaximized(true))
+  mainWindow.on('unmaximize', sendMaximized(false))
 
   // 仍有任務處理中 → 關閉前確認
   mainWindow.on('close', (e) => {

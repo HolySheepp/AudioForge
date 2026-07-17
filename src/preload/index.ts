@@ -29,6 +29,15 @@ const api = {
     return () => ipcRenderer.removeListener('jobs:update', listener)
   },
 
+  winMinimize: (): void => ipcRenderer.send('window:minimize'),
+  winToggleMaximize: (): void => ipcRenderer.send('window:toggleMaximize'),
+  winClose: (): void => ipcRenderer.send('window:close'),
+  onWindowMaximized: (cb: (v: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, v: boolean): void => cb(v)
+    ipcRenderer.on('window:maximized', listener)
+    return () => ipcRenderer.removeListener('window:maximized', listener)
+  },
+
   /** 旋鈕棘輪跨齒 → 觸覺 tick(fire-and-forget) */
   hapticTick: (): void => ipcRenderer.send('haptic:tick'),
   hapticTest: (): Promise<boolean> => ipcRenderer.invoke('haptic:test'),

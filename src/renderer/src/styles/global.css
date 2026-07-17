@@ -35,11 +35,10 @@
    每色兩個變體:深色主題用高明度版(在暗底上發亮),淺色主題用低明度版(在白底上夠對比)。
    全部沿用預設藍 hsl(220,100%,65%) / hsl(220,75%,53%) 的明度與飽和度骨架,只換色相,
    確保任一副色與整體設計語彙一致。 */
-:root[data-theme='dark'][data-accent='green'] {
-  --accent: #42d65a;
-}
+/* 綠色為用戶指定色值,深淺主題共用(用戶確認淺色底對比可接受) */
+:root[data-theme='dark'][data-accent='green'],
 :root[data-theme='light'][data-accent='green'] {
-  --accent: #229b36;
+  --accent: #42d65a;
 }
 
 :root[data-theme='dark'][data-accent='purple'] {

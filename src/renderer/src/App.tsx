@@ -58,9 +58,9 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className={`app${dragging ? ' dragging' : ''}`}>
-      <Header onOpenSettings={() => setSettingsOpen(true)} />
+      <Header />
       <div className="app-mid">
-        <Sidebar />
+        <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
         <div className="app-center">
           <div className="panes">
             <SourcePane />

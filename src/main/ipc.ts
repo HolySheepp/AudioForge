@@ -64,6 +64,16 @@ export function registerIpc(getWindow: GetWindow): void {
   ipcMain.handle('jobs:cancelAll', () => queue.cancelAll())
   ipcMain.handle('jobs:hasActive', () => queue.hasActiveWork())
 
+  // 無邊框視窗的自製標題列控制
+  ipcMain.on('window:minimize', () => getWindow()?.minimize())
+  ipcMain.on('window:toggleMaximize', () => {
+    const w = getWindow()
+    if (!w) return
+    if (w.isMaximized()) w.unmaximize()
+    else w.maximize()
+  })
+  ipcMain.on('window:close', () => getWindow()?.close())
+
   // 觸覺回饋:tick 走 send(fire-and-forget,不等回覆);測試走 invoke
   ipcMain.on('haptic:tick', () => hapticTick())
   ipcMain.handle('haptic:test', () => hapticTest())

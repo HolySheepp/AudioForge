@@ -38,14 +38,41 @@
   min-height: 0;
 }
 
-/* ===== Header ===== */
+/* ===== Header(兼任無邊框視窗的標題列)===== */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 0 0 0 14px;
+  height: 40px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  /* 整條可拖曳移動視窗;互動元件個別標記 no-drag */
+  -webkit-app-region: drag;
+}
+.win-controls {
+  display: flex;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+.win-controls button {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.win-controls button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.win-controls .win-close:hover {
+  background: #e81123;
+  color: #fff;
 }
 .header-brand {
   display: flex;
@@ -87,10 +114,17 @@
   flex-direction: column;
   gap: 4px;
   width: 208px;
-  padding: 10px 8px;
+  padding: 10px 8px 8px;
   background: var(--surface);
   border-right: 1px solid var(--border);
   overflow-y: auto;
+}
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 .sidebar-item {
   display: flex;
@@ -642,6 +676,54 @@
   align-items: center;
   justify-content: space-between;
 }
+.modal-settings {
+  width: 460px;
+  min-height: 420px;
+}
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.modal-tab {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.modal-tab:hover {
+  background: var(--surface-2);
+}
+.modal-tab.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.modal-tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+.sound-credit {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.haptics-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+.haptics-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
 .modal-head h2 {
   font-size: 15px;
 }
@@ -690,7 +772,7 @@
   --swatch: #2f6fe0;
 }
 :root[data-theme='light'] .accent-swatch[data-accent-preview='green'] {
-  --swatch: #229b36;
+  --swatch: #42d65a;
 }
 :root[data-theme='light'] .accent-swatch[data-accent-preview='purple'] {
   --swatch: #7342d7;

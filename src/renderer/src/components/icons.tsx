@@ -98,3 +98,19 @@ export const IconArrowLeft = ({ size = 14 }: IconProps): React.JSX.Element =>
 
 export const IconPlay = ({ size = 14 }: IconProps): React.JSX.Element =>
   base(size, <path d="M6 4.5v15l13-7.5z" />, true)
+
+/* 視窗控制(無邊框標題列用,線條較細) */
+export const IconWinMin = ({ size = 12 }: IconProps): React.JSX.Element =>
+  base(size, <line x1="4" y1="12" x2="20" y2="12" strokeWidth="1.6" />)
+
+export const IconWinMax = ({ size = 12 }: IconProps): React.JSX.Element =>
+  base(size, <rect x="5" y="5" width="14" height="14" rx="1" strokeWidth="1.6" />)
+
+export const IconWinRestore = ({ size = 12 }: IconProps): React.JSX.Element =>
+  base(size, <>
+    <rect x="4" y="8" width="12" height="12" rx="1" strokeWidth="1.6" />
+    <path d="M8 8V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3" strokeWidth="1.6" />
+  </>)
+
+export const IconWinClose = ({ size = 12 }: IconProps): React.JSX.Element =>
+  base(size, <path d="M5 5l14 14M19 5L5 19" strokeWidth="1.6" />)

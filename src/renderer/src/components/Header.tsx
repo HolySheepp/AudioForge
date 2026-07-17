@@ -1,38 +1,38 @@
-import { useApp, resolveEffectiveTheme } from '../store'
+import { useEffect, useState } from 'react'
 import { useT } from '../hooks/useT'
-import { IconGear, IconLogo, IconMoon, IconSun } from './icons'
+import { IconLogo, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons'
 
-export function Header({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
+/** 無邊框視窗的自製標題列:可拖曳,含最小化/最大化/關閉 */
+export function Header(): React.JSX.Element {
   const t = useT()
-  const settings = useApp((s) => s.settings)
-  const saveSettings = useApp((s) => s.saveSettings)
-  if (!settings) return <header className="header" />
+  const [maximized, setMaximized] = useState(false)
 
-  // 快速切換鈕只在淺/深兩態之間切;「跟隨系統」仍可在設定頁選擇
-  const effective = resolveEffectiveTheme(settings.theme)
-  const toggleTheme = (): void => void saveSettings({ theme: effective === 'dark' ? 'light' : 'dark' })
+  useEffect(() => window.api.onWindowMaximized(setMaximized), [])
 
   return (
-    <header className="header">
+    <header className="header titlebar">
       <div className="header-brand">
         <span className="header-logo">
           <IconLogo />
         </span>
         <h1>{t('app.name')}</h1>
       </div>
-      <div className="header-actions">
+      <div className="win-controls">
+        <button title={t('window.minimize')} onClick={() => window.api.winMinimize()}>
+          <IconWinMin />
+        </button>
         <button
-          className="icon-btn"
-          onClick={() => void saveSettings({ language: settings.language === 'zh' ? 'en' : 'zh' })}
-          title={t('settings.language')}
+          title={maximized ? t('window.restore') : t('window.maximize')}
+          onClick={() => window.api.winToggleMaximize()}
         >
-          {settings.language === 'zh' ? '繁' : 'EN'}
+          {maximized ? <IconWinRestore /> : <IconWinMax />}
         </button>
-        <button className="icon-btn" onClick={toggleTheme} title={t(`settings.theme.${effective}`)}>
-          {effective === 'dark' ? <IconMoon /> : <IconSun />}
-        </button>
-        <button className="icon-btn" onClick={onOpenSettings} title={t('settings.title')}>
-          <IconGear />
+        <button
+          className="win-close"
+          title={t('window.close')}
+          onClick={() => window.api.winClose()}
+        >
+          <IconWinClose />
         </button>
       </div>
     </header>

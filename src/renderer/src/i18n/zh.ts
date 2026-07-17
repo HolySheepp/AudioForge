@@ -109,8 +109,18 @@ export const zh = {
   'analysis.copyTable': '複製結果表',
   'analysis.copied': '已複製到剪貼簿',
 
+  // 視窗控制
+  'window.minimize': '最小化',
+  'window.maximize': '最大化',
+  'window.restore': '還原',
+  'window.close': '關閉',
+
   // 設定
   'settings.title': '設定',
+  'settings.tab.general': '一般',
+  'settings.tab.appearance': '外觀與音效',
+  'settings.tab.haptics': '觸覺回饋',
+  'settings.tab.hardware': '硬體',
   'settings.output': '輸出位置',
   'settings.output.source': '與來源相同資料夾',
   'settings.output.fixed': '固定資料夾',
@@ -138,11 +148,13 @@ export const zh = {
   'settings.sound.timing': '播放時機',
   'settings.sound.timing.perFile': '每個檔案完成',
   'settings.sound.timing.batch': '全部完成才播放',
+  'settings.sound.credit': '由衷感謝由 SoundShelfStudio 製作的免費音效',
 
   'settings.haptics': '旋鈕觸覺回饋',
   'settings.haptics.hint': '需要 MX Master 4 滑鼠 + Logi Options+ 的 HapticWeb 外掛',
   'settings.haptics.waveform': '觸覺波形 (0–15)',
   'settings.haptics.test': '測試震動',
+  'settings.haptics.tryKnob': '試轉手感',
   'toast.hapticOk': '已送出測試震動',
   'toast.hapticFail': '未偵測到 HapticWeb 服務(請確認 Logi Options+ 與外掛已啟動)',
   'settings.hwDetected': '偵測到的 GPU',

@@ -7,12 +7,13 @@
   --text: #e8eaf0;
   --text-dim: #9aa0ad;
   --accent: #4f8cff;
-  --accent-soft: rgba(79, 140, 255, 0.16);
   --border: #333845;
   --danger: #ff5c5c;
   --success: #3ecf8e;
   --warning: #ffb648;
   --shadow: rgba(0, 0, 0, 0.45);
+  /* 延遲求值:副色被下方 data-accent 覆寫時會自動跟著變 */
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 :root[data-theme='light'] {
@@ -22,12 +23,60 @@
   --text: #23262e;
   --text-dim: #6a7080;
   --accent: #2f6fe0;
-  --accent-soft: rgba(47, 111, 224, 0.12);
   --border: #d8dbe4;
   --danger: #d94040;
   --success: #199a64;
   --warning: #cf8a1d;
   --shadow: rgba(30, 40, 60, 0.18);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ===== 副色(accent)選項 =====
+   每色兩個變體:深色主題用高明度版(在暗底上發亮),淺色主題用低明度版(在白底上夠對比)。
+   全部沿用預設藍 hsl(220,100%,65%) / hsl(220,75%,53%) 的明度與飽和度骨架,只換色相,
+   確保任一副色與整體設計語彙一致。 */
+:root[data-theme='dark'][data-accent='green'] {
+  --accent: #42d78c;
+}
+:root[data-theme='light'][data-accent='green'] {
+  --accent: #1b9859;
+}
+
+:root[data-theme='dark'][data-accent='purple'] {
+  --accent: #ac86f9;
+}
+:root[data-theme='light'][data-accent='purple'] {
+  --accent: #7342d7;
+}
+
+:root[data-theme='dark'][data-accent='teal'] {
+  --accent: #30c9e8;
+}
+:root[data-theme='light'][data-accent='teal'] {
+  --accent: #1395ae;
+}
+
+:root[data-theme='dark'][data-accent='amber'] {
+  --accent: #faad42;
+}
+:root[data-theme='light'][data-accent='amber'] {
+  --accent: #c67a10;
+}
+
+:root[data-theme='dark'][data-accent='rose'] {
+  --accent: #f76495;
+}
+:root[data-theme='light'][data-accent='rose'] {
+  --accent: #d92662;
+}
+
+/* 切換主題的當下暫停所有過場動畫。
+   各元素的 transition 本是為 hover 準備的,換主題時會讓它們用各自的速度慢慢變色,
+   與無 transition 的容器不同步 → 視覺上就是「閃一下」。 */
+:root.theme-switching *,
+:root.theme-switching *::before,
+:root.theme-switching *::after {
+  transition: none !important;
 }
 
 * {
@@ -47,7 +96,6 @@ body {
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
-  transition: background 150ms ease, color 150ms ease;
   user-select: none;
   overflow: hidden;
 }

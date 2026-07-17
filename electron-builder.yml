@@ -10,6 +10,10 @@ extraResources:
     to: bin
     filter:
       - "**/*"
+  - from: resources/sounds
+    to: sounds
+    filter:
+      - "**/*"
 win:
   target:
     - target: nsis

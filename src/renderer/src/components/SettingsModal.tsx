@@ -1,5 +1,6 @@
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
+import { ACCENTS } from '../../../shared/types'
 
 export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.Element | null {
   const t = useT()
@@ -7,6 +8,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
   const hardware = useApp((s) => s.hardware)
   const saveSettings = useApp((s) => s.saveSettings)
   const toast = useApp((s) => s.toast)
+  const sounds = useApp((s) => s.sounds)
+  const playSound = useApp((s) => s.playSound)
   if (!settings) return null
 
   return (
@@ -67,6 +70,21 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
           </select>
         </label>
 
+        <div className="field">
+          <span>{t('settings.accent')}</span>
+          <div className="accent-swatches">
+            {ACCENTS.map((a) => (
+              <button
+                key={a}
+                className={`accent-swatch${settings.accent === a ? ' active' : ''}`}
+                data-accent-preview={a}
+                title={t(`settings.accent.${a}`)}
+                onClick={() => void saveSettings({ accent: a })}
+              />
+            ))}
+          </div>
+        </div>
+
         <label className="field">
           <span>{t('settings.language')}</span>
           <select
@@ -77,6 +95,42 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
             <option value="en">English</option>
           </select>
         </label>
+
+        <label className="check-inline">
+          <input
+            type="checkbox"
+            checked={settings.soundEnabled}
+            onChange={(e) => void saveSettings({ soundEnabled: e.target.checked })}
+          />
+          {t('settings.sound')}
+        </label>
+        {settings.soundEnabled && (
+          <div className="field field-row">
+            <span>{t('settings.sound.pick')}</span>
+            {sounds.length === 0 ? (
+              <span className="panel-hint">{t('settings.sound.none')}</span>
+            ) : (
+              <>
+                <select
+                  value={settings.soundId || sounds[0].id}
+                  onChange={(e) => void saveSettings({ soundId: e.target.value })}
+                >
+                  {sounds.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {settings.language === 'zh' ? s.zhName : s.enName}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="mini-btn"
+                  onClick={() => playSound(settings.soundId || sounds[0].id)}
+                >
+                  {t('settings.sound.test')}
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         <label className="field">
           <span>{t('settings.hwAccel')}</span>

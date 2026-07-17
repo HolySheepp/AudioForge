@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { HardwareInfo, JobSpec, JobUpdate, MediaInfo, Settings } from '../shared/types'
+import type { HardwareInfo, JobSpec, JobUpdate, MediaInfo, Settings, SoundInfo } from '../shared/types'
 
 /** 暴露給 renderer 的 API;所有檔案系統與 FFmpeg 操作都經由這裡進 main process */
 const api = {
@@ -32,6 +32,8 @@ const api = {
   /** 旋鈕棘輪跨齒 → 觸覺 tick(fire-and-forget) */
   hapticTick: (): void => ipcRenderer.send('haptic:tick'),
   hapticTest: (): Promise<boolean> => ipcRenderer.invoke('haptic:test'),
+
+  listSounds: (): Promise<SoundInfo[]> => ipcRenderer.invoke('sounds:list'),
 
   getWaveform: (path: string, mtimeMs: number): Promise<number[]> =>
     ipcRenderer.invoke('waveform:get', path, mtimeMs),

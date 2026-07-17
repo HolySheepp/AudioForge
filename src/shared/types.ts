@@ -72,8 +72,23 @@ export interface HardwareInfo {
   chosenEncoder: string | null
 }
 
+/** 副色選項;實際色值定義在 global.css 的 :root[data-accent=...] */
+export const ACCENTS = ['blue', 'green', 'purple', 'teal', 'amber', 'rose'] as const
+export type Accent = (typeof ACCENTS)[number]
+
+/** 音效檔:檔名格式為「中文名_English Name.mp3」 */
+export interface SoundInfo {
+  /** 穩定 id = 檔名(不含副檔名) */
+  id: string
+  zhName: string
+  enName: string
+  path: string
+}
+
 export interface Settings {
   theme: 'system' | 'light' | 'dark'
+  /** 副色 */
+  accent: Accent
   language: 'zh' | 'en'
   outputMode: 'source' | 'fixed'
   outputDir: string
@@ -83,6 +98,10 @@ export interface Settings {
   haptics: boolean
   /** 觸覺波形索引(0–15) */
   hapticWaveform: number
+  /** 佇列全部完成時播放提示音 */
+  soundEnabled: boolean
+  /** 選用的音效 id;空字串 = 用清單第一個 */
+  soundId: string
   /** 各功能面板上次使用的參數 */
   toolParams: Record<string, Record<string, unknown>>
   /** 各旋鈕的棘輪步進選擇(key = 旋鈕 id) */
@@ -91,6 +110,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
+  accent: 'blue',
   language: 'zh',
   outputMode: 'source',
   outputDir: '',
@@ -98,6 +118,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hwAccel: 'auto',
   haptics: true,
   hapticWaveform: 0,
+  soundEnabled: true,
+  soundId: '',
   toolParams: {},
   knobSteps: {}
 }

@@ -645,6 +645,66 @@
 .modal-head h2 {
   font-size: 15px;
 }
+/* ===== 副色色票 ===== */
+.accent-swatches {
+  display: flex;
+  gap: 8px;
+}
+.accent-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 120ms;
+}
+.accent-swatch:hover {
+  transform: scale(1.12);
+}
+.accent-swatch.active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--surface) inset;
+}
+/* 色票顯示各副色在當前主題下的實際顏色 */
+.accent-swatch[data-accent-preview='blue'] {
+  --swatch: #4f8cff;
+}
+.accent-swatch[data-accent-preview='green'] {
+  --swatch: #42d78c;
+}
+.accent-swatch[data-accent-preview='purple'] {
+  --swatch: #ac86f9;
+}
+.accent-swatch[data-accent-preview='teal'] {
+  --swatch: #30c9e8;
+}
+.accent-swatch[data-accent-preview='amber'] {
+  --swatch: #faad42;
+}
+.accent-swatch[data-accent-preview='rose'] {
+  --swatch: #f76495;
+}
+:root[data-theme='light'] .accent-swatch[data-accent-preview='blue'] {
+  --swatch: #2f6fe0;
+}
+:root[data-theme='light'] .accent-swatch[data-accent-preview='green'] {
+  --swatch: #1b9859;
+}
+:root[data-theme='light'] .accent-swatch[data-accent-preview='purple'] {
+  --swatch: #7342d7;
+}
+:root[data-theme='light'] .accent-swatch[data-accent-preview='teal'] {
+  --swatch: #1395ae;
+}
+:root[data-theme='light'] .accent-swatch[data-accent-preview='amber'] {
+  --swatch: #c67a10;
+}
+:root[data-theme='light'] .accent-swatch[data-accent-preview='rose'] {
+  --swatch: #d92662;
+}
+
 .settings-hw {
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
 {
   "name": "audioforge",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "AudioForge — 精簡高效的音訊批次處理工作站(簡化版 Shutter Encoder)",
   "main": "./out/main/index.js",
   "author": "francishuang",

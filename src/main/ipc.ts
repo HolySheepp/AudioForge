@@ -5,6 +5,7 @@ import { probeFile } from './ffmpeg/probe'
 import { getWaveform } from './waveform'
 import { ensurePreview } from './preview'
 import { hapticTick, hapticTest } from './haptics'
+import { listSounds } from './sounds'
 import { resolveThemeBg } from './index'
 import { ALL_EXTS } from '../shared/types'
 import { detectHardware } from './ffmpeg/hardware'
@@ -66,6 +67,8 @@ export function registerIpc(getWindow: GetWindow): void {
   // 觸覺回饋:tick 走 send(fire-and-forget,不等回覆);測試走 invoke
   ipcMain.on('haptic:tick', () => hapticTick())
   ipcMain.handle('haptic:test', () => hapticTest())
+
+  ipcMain.handle('sounds:list', () => listSounds())
 
   ipcMain.handle('waveform:get', (_e, path: string, mtimeMs: number) => getWaveform(path, mtimeMs))
 

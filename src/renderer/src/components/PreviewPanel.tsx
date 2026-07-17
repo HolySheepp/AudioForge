@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
-
-function toMediaUrl(path: string): string {
-  return 'media:///' + path.split(/[\\/]/).map(encodeURIComponent).join('/')
-}
+import { toMediaUrl } from '../utils/media'
 
 interface PreviewState {
   url: string

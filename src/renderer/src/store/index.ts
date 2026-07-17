@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { translate } from '../i18n'
+import { toMediaUrl } from '../utils/media'
 import type {
   AnalysisResult,
   HardwareInfo,
@@ -8,6 +9,7 @@ import type {
   JobUpdate,
   MediaInfo,
   Settings,
+  SoundInfo,
   ToolId
 } from '../../../shared/types'
 
@@ -47,12 +49,14 @@ interface AppState {
   tool: ToolId
   settings: Settings | null
   hardware: HardwareInfo | null
+  sounds: SoundInfo[]
   source: SourceItem[]
   processed: ProcessedItem[]
   selectedPath: string | null
   toasts: Toast[]
 
   init: () => Promise<void>
+  playSound: (soundId?: string) => void
   setTool: (t: ToolId) => void
   addPaths: (raw: string[]) => Promise<void>
   removeSource: (id: string) => void
@@ -76,6 +80,7 @@ export const useApp = create<AppState>((set, get) => ({
   tool: 'analysis',
   settings: null,
   hardware: null,
+  sounds: [],
   source: [],
   processed: [],
   selectedPath: null,
@@ -85,9 +90,21 @@ export const useApp = create<AppState>((set, get) => ({
     const settings = await window.api.getSettings()
     set({ settings })
     applyTheme(settings.theme)
+    applyAccent(settings.accent)
     window.api.onJobsUpdate((u) => applyJobUpdate(u, set, get))
     // 硬體偵測較慢(試編),背景進行
     window.api.getHardware().then((hardware) => set({ hardware }))
+    window.api.listSounds().then((sounds) => set({ sounds }))
+  },
+
+  /** 播放提示音;不指定 id 時用設定選的(未選則清單第一個) */
+  playSound: (soundId) => {
+    const { sounds, settings } = get()
+    if (!sounds.length) return
+    const id = soundId ?? settings?.soundId
+    const sound = sounds.find((s) => s.id === id) ?? sounds[0]
+    const audio = new Audio(toMediaUrl(sound.path))
+    void audio.play().catch(() => undefined)
   },
 
   setTool: (tool) => set({ tool }),
@@ -180,6 +197,7 @@ export const useApp = create<AppState>((set, get) => ({
     const settings = await window.api.updateSettings(patch)
     set({ settings })
     if (patch.theme) applyTheme(settings.theme)
+    if (patch.accent) applyAccent(settings.accent)
   },
 
   saveToolParams: (tool, params) => {
@@ -208,11 +226,17 @@ export const useApp = create<AppState>((set, get) => ({
   cancelAll: () => void window.api.cancelAllJobs()
 }))
 
+function hasActiveJobs(source: SourceItem[]): boolean {
+  return source.some((it) => it.status === 'waiting' || it.status === 'running')
+}
+
 function applyJobUpdate(
   u: JobUpdate,
   set: (fn: (s: AppState) => Partial<AppState>) => void,
   get: () => AppState
 ): void {
+  const wasActive = hasActiveJobs(get().source)
+
   set((s) => ({
     source: s.source.map((it) => {
       if (it.id !== u.itemId) return it
@@ -226,6 +250,11 @@ function applyJobUpdate(
       }
     })
   }))
+
+  // 整批任務跑完的那一刻(而非每個檔案完成)播一次提示音
+  if (wasActive && !hasActiveJobs(get().source) && get().settings?.soundEnabled) {
+    get().playSound()
+  }
 
   if (u.status === 'done' && u.outputs?.length) {
     const items: ProcessedItem[] = u.outputs.map((path) => ({
@@ -256,8 +285,21 @@ export function resolveEffectiveTheme(theme: Settings['theme']): 'light' | 'dark
   return theme
 }
 
+/**
+ * 套用主題。切換的當下先停用所有 transition,讓整個畫面在同一影格改色,
+ * 避免有 transition 的元素(按鈕等)比容器慢一拍造成閃爍。
+ */
 export function applyTheme(theme: Settings['theme']): void {
-  document.documentElement.dataset.theme = resolveEffectiveTheme(theme)
+  const root = document.documentElement
+  root.classList.add('theme-switching')
+  root.dataset.theme = resolveEffectiveTheme(theme)
+  // 強制重排,確保新顏色在 transition 仍停用時就繪出
+  void root.offsetHeight
+  requestAnimationFrame(() => root.classList.remove('theme-switching'))
+}
+
+export function applyAccent(accent: Settings['accent']): void {
+  document.documentElement.dataset.accent = accent
 }
 
 // 跟隨系統主題的即時切換

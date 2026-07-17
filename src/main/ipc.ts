@@ -5,6 +5,7 @@ import { probeFile } from './ffmpeg/probe'
 import { getWaveform } from './waveform'
 import { ensurePreview } from './preview'
 import { hapticTick, hapticTest } from './haptics'
+import { resolveThemeBg } from './index'
 import { ALL_EXTS } from '../shared/types'
 import { detectHardware } from './ffmpeg/hardware'
 import { getSettings, updateSettings } from './settings'
@@ -49,6 +50,8 @@ export function registerIpc(getWindow: GetWindow): void {
   ipcMain.handle('settings:update', (_e, patch: Partial<Settings>) => {
     const s = updateSettings(patch)
     queue.setConcurrency(s.concurrency)
+    // 主題變更 → 同步原生視窗底色,避免切換時露出舊底色造成閃爍
+    if (patch.theme) getWindow()?.setBackgroundColor(resolveThemeBg(s.theme))
     return s
   })
 

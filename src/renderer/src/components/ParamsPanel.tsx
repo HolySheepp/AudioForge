@@ -98,7 +98,7 @@ function NormalizePanel(): React.JSX.Element {
         label={t('param.targetLufs')}
         value={p.lufs}
         onChange={(v) => update({ lufs: v })}
-        min={-36}
+        min={-35}
         max={-5}
         stepOptions={[0.5, 0.1, 1]}
         unit="LUFS"
@@ -355,7 +355,7 @@ function MultitrackPanel(): React.JSX.Element {
                   label={t('param.targetLufs')}
                   value={tracks[i].lufs}
                   onChange={(v) => setTrack(i, { lufs: v })}
-                  min={-36}
+                  min={-35}
                   max={-5}
                   stepOptions={[0.5, 0.1, 1]}
                   unit="LUFS"

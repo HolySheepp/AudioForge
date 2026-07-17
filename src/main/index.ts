@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, shell, dialog } from 'electron'
+import { app, BrowserWindow, protocol, net, shell, dialog, nativeTheme } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { registerIpc } from './ipc'
@@ -18,6 +18,15 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow: BrowserWindow | null = null
 
+// 與 global.css 的 --bg 完全一致;原生視窗背景色需跟著主題同步,
+// 否則切換主題重繪的瞬間會露出底色,看起來像閃一下
+const THEME_BG = { light: '#f4f5f8', dark: '#16181d' } as const
+
+export function resolveThemeBg(theme: 'system' | 'light' | 'dark'): string {
+  if (theme === 'system') return nativeTheme.shouldUseDarkColors ? THEME_BG.dark : THEME_BG.light
+  return THEME_BG[theme]
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -27,7 +36,7 @@ function createWindow(): void {
     show: false,
     title: 'AudioForge',
     autoHideMenuBar: true,
-    backgroundColor: '#16181d',
+    backgroundColor: resolveThemeBg(getSettings().theme),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -88,6 +97,11 @@ app.whenReady().then(() => {
   registerAllTools()
   registerIpc(() => mainWindow)
   createWindow()
+
+  // 主題設為「跟隨系統」時,作業系統深淺色切換也要同步視窗底色
+  nativeTheme.on('updated', () => {
+    if (getSettings().theme === 'system') mainWindow?.setBackgroundColor(resolveThemeBg('system'))
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

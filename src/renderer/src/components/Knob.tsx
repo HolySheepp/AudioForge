@@ -156,7 +156,7 @@ export function Knob({
 
   const beginEdit = (): void => {
     stopInertia()
-    setEditText(String(valueRef.current))
+    setEditText(valueRef.current.toFixed(digits))
     setEditing(true)
   }
 

@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useApp, type SourceItem } from '../store'
 import { useT } from '../hooks/useT'
 import { fmtDuration, fmtDb } from '../utils/format'
-import { AUDIO_EXTS } from '../../../shared/types'
-import { IconDrop, IconNote, IconStop, IconWarn } from './icons'
+import { IconDrop, IconStop, IconWarn } from './icons'
 
 export function SourcePane(): React.JSX.Element {
   const t = useT()
@@ -33,12 +32,7 @@ export function SourcePane(): React.JSX.Element {
           </div>
         ) : (
           source.map((item) => (
-            <SourceRow
-              key={item.id}
-              item={item}
-              showReplace={tool === 'replace'}
-              onShowError={setErrorView}
-            />
+            <SourceRow key={item.id} item={item} tool={tool} onShowError={setErrorView} />
           ))
         )}
       </div>
@@ -59,11 +53,11 @@ export function SourcePane(): React.JSX.Element {
 
 function SourceRow({
   item,
-  showReplace,
+  tool,
   onShowError
 }: {
   item: SourceItem
-  showReplace: boolean
+  tool: string
   onShowError: (text: string) => void
 }): React.JSX.Element {
   const t = useT()
@@ -72,42 +66,50 @@ function SourceRow({
   const select = useApp((s) => s.select)
   const selectedPath = useApp((s) => s.selectedPath)
   const cancelItem = useApp((s) => s.cancelItem)
+  const replaceAudio = useApp((s) => s.replaceAudio)
   const setReplaceAudio = useApp((s) => s.setReplaceAudio)
+  const anyVideoChecked = useApp((s) =>
+    s.source.some((it) => it.checked && it.info?.hasVideo)
+  )
 
   const busy = item.status === 'waiting' || item.status === 'running'
-  // Replace 模式:把音訊檔直接拖到影片列上即完成配對
-  const rowDropTarget = showReplace && Boolean(item.info?.hasVideo)
+  const isVideo = Boolean(item.info?.hasVideo)
+  const isAudio = Boolean(item.info && !item.info.hasVideo)
+
+  // 各功能的選取規則
+  // replace:影片用勾選框;音訊改用單選圓(勾了影片才解鎖)
+  // mixdown:只能選音訊,影片列停用
+  const replaceMode = tool === 'replace'
+  const audioAsRadio = replaceMode && isAudio
+  const disabledRow =
+    item.probeFailed ||
+    (tool === 'mixdown' && isVideo) ||
+    (audioAsRadio && !anyVideoChecked)
 
   return (
     <div
-      className={`row${selectedPath === item.path ? ' selected' : ''}${item.probeFailed ? ' failed' : ''}`}
+      className={`row${selectedPath === item.path ? ' selected' : ''}${disabledRow ? ' dimmed' : ''}`}
       onClick={() => select(item.path)}
-      onDragOver={(e) => {
-        if (rowDropTarget) {
-          e.preventDefault()
-          e.stopPropagation()
-        }
-      }}
-      onDrop={(e) => {
-        if (!rowDropTarget) return
-        const file = e.dataTransfer.files[0]
-        if (!file) return
-        const path = window.api.getPathForFile(file)
-        const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-        if (AUDIO_EXTS.includes(ext)) {
-          e.preventDefault()
-          e.stopPropagation()
-          setReplaceAudio(item.id, path)
-        }
-      }}
     >
-      <input
-        type="checkbox"
-        checked={item.checked}
-        disabled={item.probeFailed}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => setChecked(item.id, e.target.checked)}
-      />
+      {audioAsRadio ? (
+        <button
+          className={`radio${replaceAudio === item.path ? ' on' : ''}`}
+          disabled={!anyVideoChecked}
+          title={t('param.replace.useAsAudio')}
+          onClick={(e) => {
+            e.stopPropagation()
+            setReplaceAudio(replaceAudio === item.path ? null : item.path)
+          }}
+        />
+      ) : (
+        <input
+          type="checkbox"
+          checked={item.checked}
+          disabled={disabledRow}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setChecked(item.id, e.target.checked)}
+        />
+      )}
       <div className="row-main">
         <span className="row-name" title={item.path}>{item.info?.name ?? item.path}</span>
         <span className="row-meta">
@@ -126,12 +128,6 @@ function SourceRow({
             t('source.probing')
           )}
         </span>
-        {showReplace && item.info?.hasVideo && (
-          <ReplacePicker
-            value={item.replaceAudioPath}
-            onPick={(p) => setReplaceAudio(item.id, p)}
-          />
-        )}
         {item.note === 'downgradedAac' && (
           <span className="row-note">
             <IconWarn /> {t('note.downgradedAac')}
@@ -193,38 +189,5 @@ function SourceRow({
         </button>
       )}
     </div>
-  )
-}
-
-function ReplacePicker({
-  value,
-  onPick
-}: {
-  value: string | null
-  onPick: (p: string | null) => void
-}): React.JSX.Element {
-  const t = useT()
-  return (
-    <span className="row-replace" onClick={(e) => e.stopPropagation()}>
-      {value ? (
-        <>
-          <span className="row-replace-name" title={value}>
-            <IconNote /> {value.split(/[\\/]/).pop()}
-          </span>
-          <button className="row-x" onClick={() => onPick(null)}>✕</button>
-        </>
-      ) : (
-        <button
-          className="mini-btn accent"
-          onClick={() => {
-            void window.api.pickAudioFile().then((p) => {
-              if (p) onPick(p)
-            })
-          }}
-        >
-          {t('param.replace.pickAudio')}
-        </button>
-      )}
-    </span>
   )
 }

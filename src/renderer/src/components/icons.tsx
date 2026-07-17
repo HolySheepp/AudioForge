@@ -99,6 +99,13 @@ export const IconArrowLeft = ({ size = 14 }: IconProps): React.JSX.Element =>
 export const IconPlay = ({ size = 14 }: IconProps): React.JSX.Element =>
   base(size, <path d="M6 4.5v15l13-7.5z" />, true)
 
+export const IconMixdown = ({ size = 18 }: IconProps): React.JSX.Element =>
+  base(size, <>
+    <path d="M4 5h7M4 12h5M4 19h7" />
+    <path d="M11 5c4 0 4 7 8 7M9 12h10M11 19c4 0 4-7 8-7" />
+    <polyline points="16 9 19 12 16 15" />
+  </>)
+
 /* 視窗控制(無邊框標題列用,線條較細) */
 export const IconWinMin = ({ size = 12 }: IconProps): React.JSX.Element =>
   base(size, <line x1="4" y1="12" x2="20" y2="12" strokeWidth="1.6" />)

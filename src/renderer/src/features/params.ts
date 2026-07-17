@@ -68,13 +68,32 @@ export const MULTITRACK_DEFAULTS: MultitrackParams = {
   limiterTp: -1
 }
 
+/** 混音合併 */
+export interface MixdownParams {
+  format: 'wav' | 'mp3' | 'aac' | 'flac'
+  /** amix normalize:自動衰減避免爆音;關閉則保留各檔原音量 */
+  autoLevel: boolean
+  duration: 'longest' | 'shortest'
+  /** 0 = 跟隨第一個輸入 */
+  sampleRate: 0 | 44100 | 48000 | 96000
+  limiter: boolean
+}
+export const MIXDOWN_DEFAULTS: MixdownParams = {
+  format: 'wav',
+  autoLevel: false,
+  duration: 'longest',
+  sampleRate: 0,
+  limiter: true
+}
+
 const DEFAULTS: Record<ToolId, Record<string, unknown>> = {
   analysis: {},
   normalize: NORMALIZE_DEFAULTS as unknown as Record<string, unknown>,
   replace: REPLACE_DEFAULTS as unknown as Record<string, unknown>,
   extract: EXTRACT_DEFAULTS as unknown as Record<string, unknown>,
   convert: CONVERT_DEFAULTS as unknown as Record<string, unknown>,
-  multitrack: MULTITRACK_DEFAULTS as unknown as Record<string, unknown>
+  multitrack: MULTITRACK_DEFAULTS as unknown as Record<string, unknown>,
+  mixdown: MIXDOWN_DEFAULTS as unknown as Record<string, unknown>
 }
 
 /** 上次參數(settings.toolParams)疊在預設值上 */

@@ -143,17 +143,84 @@ export function PreviewPanel(): React.JSX.Element {
     return () => cancelAnimationFrame(rafRef.current)
   }, [draw])
 
-  const seek = (e: React.MouseEvent<HTMLCanvasElement>): void => {
+  // ===== 時間軸拖動(scrub)+ 甩動慣性 =====
+  const scrub = useRef<{ samples: { t: number; x: number }[] } | null>(null)
+  const inertiaRaf = useRef(0)
+  const inertiaVel = useRef(0) // px/s
+  const inertiaLast = useRef(0)
+
+  const stopTimelineInertia = (): void => {
+    if (inertiaRaf.current) cancelAnimationFrame(inertiaRaf.current)
+    inertiaRaf.current = 0
+  }
+  useEffect(() => stopTimelineInertia, [selectedPath])
+
+  const seekToX = (clientX: number, el: HTMLCanvasElement): void => {
     const media = videoRef.current
     if (!media || !media.duration) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const frac = (e.clientX - rect.left) / rect.width
+    const rect = el.getBoundingClientRect()
+    const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
     media.currentTime = frac * media.duration
     if (ab === 'new' && bAudioRef.current) bAudioRef.current.currentTime = media.currentTime
   }
 
+  const onWaveDown = (e: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (e.button !== 0) return
+    stopTimelineInertia()
+    ;(e.target as Element).setPointerCapture(e.pointerId)
+    scrub.current = { samples: [{ t: performance.now(), x: e.clientX }] }
+    seekToX(e.clientX, e.currentTarget)
+  }
+
+  const onWaveMove = (e: React.PointerEvent<HTMLCanvasElement>): void => {
+    const s = scrub.current
+    if (!s) return
+    const now = performance.now()
+    s.samples.push({ t: now, x: e.clientX })
+    while (s.samples.length > 2 && now - s.samples[0].t > 100) s.samples.shift()
+    seekToX(e.clientX, e.currentTarget)
+  }
+
+  const onWaveUp = (e: React.PointerEvent<HTMLCanvasElement>): void => {
+    const s = scrub.current
+    if (!s) return
+    scrub.current = null
+    // 快甩鬆手 → 時間軸慣性滑動(摩擦衰減,節流到每影格一次 seek)
+    const cutoff = performance.now() - 120
+    const recent = s.samples.filter((p) => p.t >= cutoff)
+    if (recent.length < 2) return
+    const dt = (recent[recent.length - 1].t - recent[0].t) / 1000
+    if (dt <= 0.005) return
+    const vx = (recent[recent.length - 1].x - recent[0].x) / dt
+    if (Math.abs(vx) < 800) return
+
+    const canvas = e.currentTarget
+    inertiaVel.current = vx
+    inertiaLast.current = performance.now()
+    const tick = (now: number): void => {
+      const media = videoRef.current
+      if (!media || !media.duration) return
+      const d = Math.min(0.05, (now - inertiaLast.current) / 1000)
+      inertiaLast.current = now
+      const pxPerSec = canvas.getBoundingClientRect().width / media.duration
+      let next = media.currentTime + (inertiaVel.current / pxPerSec) * d
+      inertiaVel.current *= Math.exp(-3 * d)
+      const hitEdge = next <= 0 || next >= media.duration
+      next = Math.min(media.duration, Math.max(0, next))
+      media.currentTime = next
+      if (ab === 'new' && bAudioRef.current) bAudioRef.current.currentTime = next
+      if (hitEdge || Math.abs(inertiaVel.current) < 40) {
+        stopTimelineInertia()
+        return
+      }
+      inertiaRaf.current = requestAnimationFrame(tick)
+    }
+    inertiaRaf.current = requestAnimationFrame(tick)
+  }
+
   // A/B:B 模式 = 影片靜音 + 新音軌同步播放
-  const canAb = tool === 'replace' && Boolean(item?.replaceAudioPath) && preview?.kind === 'video'
+  const replaceAudio = useApp((s) => s.replaceAudio)
+  const canAb = tool === 'replace' && Boolean(replaceAudio) && preview?.kind === 'video'
   const setAbMode = (mode: 'original' | 'new'): void => {
     setAb(mode)
     const v = videoRef.current
@@ -223,10 +290,17 @@ export function PreviewPanel(): React.JSX.Element {
                 onPause={onPause}
                 onSeeked={onSeeked}
               />
-              {canAb && item?.replaceAudioPath && (
-                <audio ref={bAudioRef} src={toMediaUrl(item.replaceAudioPath)} />
+              {canAb && replaceAudio && (
+                <audio ref={bAudioRef} src={toMediaUrl(replaceAudio)} />
               )}
-              <canvas className="preview-wave" ref={canvasRef} onClick={seek} />
+              <canvas
+                className="preview-wave"
+                ref={canvasRef}
+                onPointerDown={onWaveDown}
+                onPointerMove={onWaveMove}
+                onPointerUp={onWaveUp}
+                onPointerCancel={onWaveUp}
+              />
             </>
           )}
         </div>

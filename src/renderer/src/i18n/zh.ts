@@ -22,6 +22,8 @@ export const zh = {
   'tool.convert.desc': 'WAV / MP3 / AAC / FLAC',
   'tool.multitrack': '多軌工作流',
   'tool.multitrack.desc': '各音軌分別標準化並混音寫回',
+  'tool.mixdown': '混音合併',
+  'tool.mixdown.desc': '把多個音訊混成單一音軌',
 
   // 來源欄
   'source.title': '來源檔案',
@@ -63,12 +65,19 @@ export const zh = {
 
   // 參數:替換
   'param.replace.audioFile': '新音軌檔案',
-  'param.replace.pickAudio': '選擇音訊…',
+  'param.replace.useAsAudio': '設為新音軌',
   'param.replace.length': '長度處理',
   'param.replace.keepVideo': '保留完整影片(音訊補靜音)',
   'param.replace.shortest': '以較短者為準',
   'param.replace.codec': '音訊編碼',
-  'param.replace.needAudio': '請先為每個勾選的影片指定新音軌',
+  'param.replace.needAudio': '勾選影片後,點選一個音訊作為新音軌',
+
+  // 參數:混音合併
+  'param.mixdown.duration': '輸出長度',
+  'param.mixdown.duration.longest': '以最長的輸入為準',
+  'param.mixdown.duration.shortest': '以最短的輸入為準',
+  'param.mixdown.autoLevel': '自動平衡音量',
+  'toast.needTwoAudio': '請勾選至少兩個音訊檔',
 
   // 參數:抽取
   'param.extract.mode': '輸出格式',
@@ -139,6 +148,10 @@ export const zh = {
   'settings.accent.teal': '青',
   'settings.accent.amber': '琥珀',
   'settings.accent.rose': '玫瑰',
+  'settings.accent.custom': '自訂顏色',
+  'settings.accent.save': '保存',
+  'settings.accent.deleteHint': '右鍵刪除',
+  'toast.customFull': '自訂副色最多保存 5 個',
 
   'settings.sound.pick': '音效',
   'settings.sound.test': '試聽',

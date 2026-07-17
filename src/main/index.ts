@@ -1,6 +1,8 @@
-import { app, BrowserWindow, protocol, net, shell, dialog, nativeTheme } from 'electron'
-import { join } from 'path'
-import { pathToFileURL } from 'url'
+import { app, BrowserWindow, protocol, shell, dialog, nativeTheme } from 'electron'
+import { join, extname } from 'path'
+import { createReadStream } from 'fs'
+import { stat } from 'fs/promises'
+import { Readable } from 'stream'
 import { registerIpc } from './ipc'
 import { initCache } from './cache'
 import { registerAllTools } from './tools'
@@ -97,11 +99,50 @@ app.whenReady().then(() => {
     )
     return
   }
-  protocol.handle('media', (request) => {
+  // 自行處理 Range 請求:<video>/<audio> 的進度條拖動(seek)必須靠 206 部分回應
+  const MEDIA_MIME: Record<string, string> = {
+    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', webm: 'video/webm',
+    m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac',
+    ogg: 'audio/ogg', opus: 'audio/ogg', aac: 'audio/aac'
+  }
+  protocol.handle('media', async (request) => {
     // media:///C%3A/Users/... → 還原為本地絕對路徑
     const raw = decodeURIComponent(new URL(request.url).pathname)
     const filePath = raw.startsWith('/') ? raw.slice(1) : raw
-    return net.fetch(pathToFileURL(filePath).toString())
+    try {
+      const st = await stat(filePath)
+      const mime =
+        MEDIA_MIME[extname(filePath).slice(1).toLowerCase()] ?? 'application/octet-stream'
+      const range = request.headers.get('Range')
+
+      if (range) {
+        const m = /bytes=(\d*)-(\d*)/.exec(range)
+        const start = m?.[1] ? Number(m[1]) : 0
+        const end = m?.[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1
+        return new Response(
+          Readable.toWeb(createReadStream(filePath, { start, end })) as ReadableStream,
+          {
+            status: 206,
+            headers: {
+              'Content-Type': mime,
+              'Accept-Ranges': 'bytes',
+              'Content-Range': `bytes ${start}-${end}/${st.size}`,
+              'Content-Length': String(end - start + 1)
+            }
+          }
+        )
+      }
+
+      return new Response(Readable.toWeb(createReadStream(filePath)) as ReadableStream, {
+        headers: {
+          'Content-Type': mime,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': String(st.size)
+        }
+      })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
   })
 
   initCache()

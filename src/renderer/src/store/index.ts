@@ -25,8 +25,6 @@ export interface SourceItem {
   note: string | null
   analysis: AnalysisResult | null
   jobId: string | null
-  /** replacement 功能:此影片配對的新音軌路徑 */
-  replaceAudioPath: string | null
 }
 
 export interface ProcessedItem {
@@ -54,6 +52,8 @@ interface AppState {
   processed: ProcessedItem[]
   selectedPath: string | null
   toasts: Toast[]
+  /** replace 功能:選作新音軌的音訊檔路徑(單選) */
+  replaceAudio: string | null
 
   init: () => Promise<void>
   playSound: (soundId?: string) => void
@@ -68,10 +68,11 @@ interface AppState {
   clearProcessed: () => void
   select: (path: string | null) => void
   toast: (text: string) => void
-  setReplaceAudio: (id: string, path: string | null) => void
+  setReplaceAudio: (path: string | null) => void
   saveSettings: (patch: Partial<Settings>) => Promise<void>
   saveToolParams: (tool: ToolId, params: Record<string, unknown>) => void
-  startJobs: (specs: JobSpec[]) => Promise<void>
+  /** groupItemIds:單一 job 涵蓋多個來源項(mixdown)時,全部標上同一 jobId */
+  startJobs: (specs: JobSpec[], groupItemIds?: string[]) => Promise<void>
   cancelItem: (id: string) => void
   cancelAll: () => void
 }
@@ -85,6 +86,7 @@ export const useApp = create<AppState>((set, get) => ({
   processed: [],
   selectedPath: null,
   toasts: [],
+  replaceAudio: null,
 
   init: async () => {
     const settings = await window.api.getSettings()
@@ -126,8 +128,7 @@ export const useApp = create<AppState>((set, get) => ({
       errorTail: null,
       note: null,
       analysis: null,
-      jobId: null,
-      replaceAudioPath: null
+      jobId: null
     }))
     set((s) => ({ source: [...s.source, ...items] }))
     if (skipped > 0) {
@@ -153,14 +154,22 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 
-  removeSource: (id) => set((s) => ({ source: s.source.filter((it) => it.id !== id) })),
+  removeSource: (id) =>
+    set((s) => {
+      const item = s.source.find((it) => it.id === id)
+      return {
+        source: s.source.filter((it) => it.id !== id),
+        // 被移除的正是選中的新音軌 → 一併清掉
+        replaceAudio: item && item.path === s.replaceAudio ? null : s.replaceAudio
+      }
+    }),
 
   setChecked: (id, v) =>
     set((s) => ({ source: s.source.map((it) => (it.id === id ? { ...it, checked: v } : it)) })),
 
   checkAll: (v) => set((s) => ({ source: s.source.map((it) => ({ ...it, checked: v })) })),
 
-  clearSource: () => set({ source: [], selectedPath: null }),
+  clearSource: () => set({ source: [], selectedPath: null, replaceAudio: null }),
 
   moveToSource: (processedId) => {
     const { processed, source } = get()
@@ -189,10 +198,7 @@ export const useApp = create<AppState>((set, get) => ({
     setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 3500)
   },
 
-  setReplaceAudio: (id, path) =>
-    set((s) => ({
-      source: s.source.map((it) => (it.id === id ? { ...it, replaceAudioPath: path } : it))
-    })),
+  setReplaceAudio: (path) => set({ replaceAudio: path }),
 
   saveSettings: async (patch) => {
     const settings = await window.api.updateSettings(patch)
@@ -207,10 +213,12 @@ export const useApp = create<AppState>((set, get) => ({
     void get().saveSettings({ toolParams: { ...s.toolParams, [tool]: params } })
   },
 
-  startJobs: async (specs) => {
+  startJobs: async (specs, groupItemIds) => {
     set((s) => ({
       source: s.source.map((it) => {
-        const spec = specs.find((sp) => sp.itemId === it.id)
+        const spec =
+          specs.find((sp) => sp.itemId === it.id) ??
+          (groupItemIds?.includes(it.id) ? specs[0] : undefined)
         return spec
           ? { ...it, jobId: spec.jobId, status: 'waiting' as const, progress: 0, errorTail: null }
           : it
@@ -240,7 +248,8 @@ function applyJobUpdate(
 
   set((s) => ({
     source: s.source.map((it) => {
-      if (it.id !== u.itemId) return it
+      // 以 jobId 比對:mixdown 這類「一個 job 涵蓋多個來源項」的更新才能同步到每一列
+      if (it.jobId !== u.jobId && it.id !== u.itemId) return it
       return {
         ...it,
         status: u.status ?? it.status,
@@ -303,8 +312,16 @@ export function applyTheme(theme: Settings['theme']): void {
   requestAnimationFrame(() => root.classList.remove('theme-switching'))
 }
 
-export function applyAccent(accent: Settings['accent']): void {
-  document.documentElement.dataset.accent = accent
+export function applyAccent(accent: string): void {
+  const root = document.documentElement
+  if (accent.startsWith('#')) {
+    // 自訂 hex:行內覆蓋 --accent(勝過樣式表的 data-accent 規則)
+    delete root.dataset.accent
+    root.style.setProperty('--accent', accent)
+  } else {
+    root.style.removeProperty('--accent')
+    root.dataset.accent = accent
+  }
 }
 
 // 跟隨系統主題的即時切換

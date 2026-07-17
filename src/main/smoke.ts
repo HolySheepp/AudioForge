@@ -122,6 +122,25 @@ export async function runSmoke(): Promise<void> {
     check('convert mp3 codec', info.audioStreams[0]?.codec === 'mp3')
   }
 
+  // ---- 4.5 mixdown(兩個 wav 混成一軌)----
+  const mx = await runJob(
+    spec('mixdown', wavA, {
+      inputPaths: [wavA, wavB],
+      format: 'wav',
+      autoLevel: false,
+      duration: 'longest',
+      sampleRate: 0,
+      limiter: true
+    })
+  )
+  check('mixdown job', mx.status === 'done', mx.errorTail ?? '')
+  if (mx.outputs?.[0]) {
+    const info = await probeFile(mx.outputs[0])
+    check('mixdown stereo', info.audioStreams[0]?.channels === 2)
+    check('mixdown wav 24-bit', info.audioStreams[0]?.codec === 'pcm_s24le', info.audioStreams[0]?.codec)
+    check('mixdown keeps sample rate', info.audioStreams[0]?.sampleRate === 48000)
+  }
+
   // ---- 5. replace(keepVideo,畫面流 copy)----
   const srcInfo = await probeFile(video)
   const r1 = await runJob(

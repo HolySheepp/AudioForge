@@ -1,5 +1,12 @@
-/** 六大功能 ID */
-export type ToolId = 'analysis' | 'normalize' | 'replace' | 'extract' | 'convert' | 'multitrack'
+/** 功能 ID */
+export type ToolId =
+  | 'analysis'
+  | 'normalize'
+  | 'replace'
+  | 'extract'
+  | 'convert'
+  | 'multitrack'
+  | 'mixdown'
 
 export interface AudioStreamInfo {
   /** 第幾條音軌(0-based,以音軌計) */
@@ -87,8 +94,10 @@ export interface SoundInfo {
 
 export interface Settings {
   theme: 'system' | 'light' | 'dark'
-  /** 副色 */
-  accent: Accent
+  /** 副色:預設色名稱,或自訂 hex(#rrggbb) */
+  accent: string
+  /** 用戶保存的自訂副色(hex,最多 5 個) */
+  customAccents: string[]
   language: 'zh' | 'en'
   outputMode: 'source' | 'fixed'
   outputDir: string
@@ -111,6 +120,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   accent: 'blue',
+  customAccents: [],
   language: 'zh',
   outputMode: 'source',
   outputDir: '',

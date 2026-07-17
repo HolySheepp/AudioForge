@@ -22,6 +22,8 @@ export const en: Record<I18nKey, string> = {
   'tool.convert.desc': 'WAV / MP3 / AAC / FLAC',
   'tool.multitrack': 'Multi-track Workflow',
   'tool.multitrack.desc': 'Per-track normalize, mix & write back',
+  'tool.mixdown': 'Mixdown',
+  'tool.mixdown.desc': 'Mix multiple audio files into one',
 
   'source.title': 'Source Files',
   'source.selectAll': 'Select All',
@@ -57,12 +59,18 @@ export const en: Record<I18nKey, string> = {
   'param.preset.streaming': '-14 LUFS / -1 dBTP (Streaming)',
 
   'param.replace.audioFile': 'New audio file',
-  'param.replace.pickAudio': 'Pick audio…',
+  'param.replace.useAsAudio': 'Use as new audio track',
   'param.replace.length': 'Length handling',
   'param.replace.keepVideo': 'Keep full video (pad audio with silence)',
   'param.replace.shortest': 'Trim to shortest',
   'param.replace.codec': 'Audio codec',
-  'param.replace.needAudio': 'Assign a new audio track to every checked video first',
+  'param.replace.needAudio': 'Check a video, then pick an audio file as the new track',
+
+  'param.mixdown.duration': 'Output length',
+  'param.mixdown.duration.longest': 'Match longest input',
+  'param.mixdown.duration.shortest': 'Match shortest input',
+  'param.mixdown.autoLevel': 'Auto-balance levels',
+  'toast.needTwoAudio': 'Check at least two audio files',
 
   'param.extract.mode': 'Output format',
   'param.extract.lossless': 'Original (lossless stream copy)',
@@ -127,6 +135,10 @@ export const en: Record<I18nKey, string> = {
   'settings.accent.teal': 'Teal',
   'settings.accent.amber': 'Amber',
   'settings.accent.rose': 'Rose',
+  'settings.accent.custom': 'Custom color',
+  'settings.accent.save': 'Save',
+  'settings.accent.deleteHint': 'right-click to delete',
+  'toast.customFull': 'Up to 5 custom colors can be saved',
 
   'settings.sound.pick': 'Sound',
   'settings.sound.test': 'Preview',

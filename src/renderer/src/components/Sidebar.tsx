@@ -5,6 +5,7 @@ import {
   IconAnalysis,
   IconConvert,
   IconExtract,
+  IconMixdown,
   IconMultitrack,
   IconNormalize,
   IconReplace
@@ -16,6 +17,7 @@ const TOOLS: { id: ToolId; icon: React.JSX.Element }[] = [
   { id: 'replace', icon: <IconReplace /> },
   { id: 'extract', icon: <IconExtract /> },
   { id: 'convert', icon: <IconConvert /> },
+  { id: 'mixdown', icon: <IconMixdown /> },
   { id: 'multitrack', icon: <IconMultitrack /> }
 ]
 

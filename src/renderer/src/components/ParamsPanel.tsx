@@ -7,6 +7,7 @@ import {
   MULTITRACK_TRACK_DEFAULT,
   type ConvertParams,
   type ExtractParams,
+  type MixdownParams,
   type MultitrackParams,
   type NormalizeParams,
   type ReplaceParams
@@ -37,6 +38,8 @@ function PanelFor({ tool }: { tool: ToolId }): React.JSX.Element {
       return <ConvertPanel />
     case 'multitrack':
       return <MultitrackPanel />
+    case 'mixdown':
+      return <MixdownPanel />
   }
 }
 
@@ -195,6 +198,64 @@ function ExtractPanel(): React.JSX.Element {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function MixdownPanel(): React.JSX.Element {
+  const t = useT()
+  const [p, update] = useToolParams<MixdownParams>('mixdown')
+  return (
+    <div className="panel-inner">
+      <label className="field">
+        <span>{t('param.convert.format')}</span>
+        <select value={p.format} onChange={(e) => update({ format: e.target.value as MixdownParams['format'] })}>
+          <option value="wav">WAV (24-bit)</option>
+          <option value="mp3">MP3 320k</option>
+          <option value="aac">AAC 256k (.m4a)</option>
+          <option value="flac">FLAC</option>
+        </select>
+      </label>
+      <label className="field">
+        <span>{t('param.mixdown.duration')}</span>
+        <select
+          value={p.duration}
+          onChange={(e) => update({ duration: e.target.value as MixdownParams['duration'] })}
+        >
+          <option value="longest">{t('param.mixdown.duration.longest')}</option>
+          <option value="shortest">{t('param.mixdown.duration.shortest')}</option>
+        </select>
+      </label>
+      <label className="field">
+        <span>{t('param.convert.sampleRate')}</span>
+        <select
+          value={p.sampleRate}
+          onChange={(e) => update({ sampleRate: Number(e.target.value) as MixdownParams['sampleRate'] })}
+        >
+          <option value={0}>{t('param.convert.keepSr')}</option>
+          <option value={44100}>44.1 kHz</option>
+          <option value={48000}>48 kHz</option>
+          <option value={96000}>96 kHz</option>
+        </select>
+      </label>
+      <div className="field">
+        <label className="check-inline">
+          <input
+            type="checkbox"
+            checked={p.autoLevel}
+            onChange={(e) => update({ autoLevel: e.target.checked })}
+          />
+          {t('param.mixdown.autoLevel')}
+        </label>
+        <label className="check-inline">
+          <input
+            type="checkbox"
+            checked={p.limiter}
+            onChange={(e) => update({ limiter: e.target.checked })}
+          />
+          {t('param.mt.limiter')}
+        </label>
+      </div>
     </div>
   )
 }

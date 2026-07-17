@@ -124,6 +124,47 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
                       onClick={() => void saveSettings({ accent: a })}
                     />
                   ))}
+                  {settings.customAccents.map((hex) => (
+                    <button
+                      key={hex}
+                      className={`accent-swatch${settings.accent === hex ? ' active' : ''}`}
+                      style={{ background: hex }}
+                      title={`${hex}(${t('settings.accent.deleteHint')})`}
+                      onClick={() => void saveSettings({ accent: hex })}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        void saveSettings({
+                          customAccents: settings.customAccents.filter((c) => c !== hex),
+                          ...(settings.accent === hex ? { accent: 'blue' } : {})
+                        })
+                      }}
+                    />
+                  ))}
+                  <label className="accent-swatch accent-add" title={t('settings.accent.custom')}>
+                    +
+                    <input
+                      type="color"
+                      value={settings.accent.startsWith('#') ? settings.accent : '#4f8cff'}
+                      onChange={(e) => void saveSettings({ accent: e.target.value })}
+                    />
+                  </label>
+                  {settings.accent.startsWith('#') &&
+                    !settings.customAccents.includes(settings.accent) && (
+                      <button
+                        className="mini-btn accent"
+                        onClick={() => {
+                          if (settings.customAccents.length >= 5) {
+                            toast(t('toast.customFull'))
+                            return
+                          }
+                          void saveSettings({
+                            customAccents: [...settings.customAccents, settings.accent]
+                          })
+                        }}
+                      >
+                        {t('settings.accent.save')}
+                      </button>
+                    )}
                 </div>
               </div>
 

@@ -236,6 +236,32 @@
   height: 15px;
   flex-shrink: 0;
 }
+.row.dimmed {
+  opacity: 0.45;
+}
+/* Replace 模式:音訊列的單選圓(空心 = 未選,中心填副色 = 已選) */
+.radio {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--text);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+.radio:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.radio.on::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 .row-main {
   flex: 1;
   min-width: 0;
@@ -741,6 +767,30 @@
 .accent-swatch.active {
   border-color: var(--text);
   box-shadow: 0 0 0 2px var(--surface) inset;
+}
+/* 自訂顏色的「+」色票:點擊開原生調色盤 */
+.accent-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1.5px dashed var(--text-dim);
+  color: var(--text-dim);
+  font-size: 15px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.accent-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.accent-add input[type='color'] {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  border: none;
+  padding: 0;
 }
 /* 色票顯示各副色在當前主題下的實際顏色 */
 .accent-swatch[data-accent-preview='blue'] {

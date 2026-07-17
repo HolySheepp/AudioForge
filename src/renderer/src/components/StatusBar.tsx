@@ -16,6 +16,7 @@ export function StatusBar(): React.JSX.Element {
   const startJobs = useApp((s) => s.startJobs)
   const cancelAll = useApp((s) => s.cancelAll)
   const toast = useApp((s) => s.toast)
+  const replaceAudio = useApp((s) => s.replaceAudio)
 
   const checked = source.filter((it) => it.checked && it.info)
   const anyRunning = source.some((it) => it.status === 'waiting' || it.status === 'running')
@@ -30,9 +31,29 @@ export function StatusBar(): React.JSX.Element {
     const params = mergedParams<Record<string, unknown>>(tool, settings.toolParams)
     let candidates = checked
 
+    // 混音合併:單一 job 吃整批已勾選的音訊檔
+    if (tool === 'mixdown') {
+      const audios = checked.filter((it) => !it.info!.hasVideo && it.info!.audioStreams.length > 0)
+      if (audios.length < 2) {
+        toast(t('toast.needTwoAudio'))
+        return
+      }
+      const spec: JobSpec = {
+        jobId: `j${Date.now()}-${jobSeq++}`,
+        itemId: audios[0].id,
+        tool,
+        path: audios[0].path,
+        params: { ...params, inputPaths: audios.map((a) => a.path) }
+      }
+      void startJobs([spec], audios.map((a) => a.id))
+      toast(t('toast.jobsStarted', { n: 1 }))
+      return
+    }
+
     if (tool === 'replace') {
       candidates = checked.filter((it) => it.info!.hasVideo)
-      if (candidates.some((it) => !it.replaceAudioPath)) {
+      const audioValid = replaceAudio && source.some((it) => it.path === replaceAudio)
+      if (candidates.length === 0 || !audioValid) {
         toast(t('param.replace.needAudio'))
         return
       }
@@ -61,7 +82,7 @@ export function StatusBar(): React.JSX.Element {
       itemId: it.id,
       tool,
       path: it.path,
-      params: { ...params, replaceAudioPath: it.replaceAudioPath }
+      params: { ...params, replaceAudioPath: replaceAudio }
     }))
     void startJobs(specs)
     toast(t('toast.jobsStarted', { n: specs.length }))

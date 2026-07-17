@@ -248,14 +248,16 @@ function applyJobUpdate(
   }
 }
 
-export function applyTheme(theme: Settings['theme']): void {
-  const root = document.documentElement
+/** 'system' 解析為實際生效的 light/dark */
+export function resolveEffectiveTheme(theme: Settings['theme']): 'light' | 'dark' {
   if (theme === 'system') {
-    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    root.dataset.theme = dark ? 'dark' : 'light'
-  } else {
-    root.dataset.theme = theme
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
+  return theme
+}
+
+export function applyTheme(theme: Settings['theme']): void {
+  document.documentElement.dataset.theme = resolveEffectiveTheme(theme)
 }
 
 // 跟隨系統主題的即時切換

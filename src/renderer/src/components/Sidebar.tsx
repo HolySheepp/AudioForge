@@ -31,12 +31,10 @@ export function Sidebar(): React.JSX.Element {
           key={id}
           className={`sidebar-item${tool === id ? ' active' : ''}`}
           onClick={() => setTool(id)}
+          title={t(`tool.${id}.desc`)}
         >
           <span className="sidebar-icon">{icon}</span>
-          <span className="sidebar-text">
-            <strong>{t(`tool.${id}`)}</strong>
-            <small>{t(`tool.${id}.desc`)}</small>
-          </span>
+          <span className="sidebar-text">{t(`tool.${id}`)}</span>
         </button>
       ))}
     </nav>

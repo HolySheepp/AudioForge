@@ -1,6 +1,6 @@
-import { useApp } from '../store'
+import { useApp, resolveEffectiveTheme } from '../store'
 import { useT } from '../hooks/useT'
-import { IconAutoTheme, IconGear, IconLogo, IconMoon, IconSun } from './icons'
+import { IconGear, IconLogo, IconMoon, IconSun } from './icons'
 
 export function Header({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
   const t = useT()
@@ -8,13 +8,9 @@ export function Header({ onOpenSettings }: { onOpenSettings: () => void }): Reac
   const saveSettings = useApp((s) => s.saveSettings)
   if (!settings) return <header className="header" />
 
-  const themes = ['light', 'dark', 'system'] as const
-  const themeIcons = {
-    light: <IconSun />,
-    dark: <IconMoon />,
-    system: <IconAutoTheme />
-  }
-  const nextTheme = themes[(themes.indexOf(settings.theme) + 1) % themes.length]
+  // 快速切換鈕只在淺/深兩態之間切;「跟隨系統」仍可在設定頁選擇
+  const effective = resolveEffectiveTheme(settings.theme)
+  const toggleTheme = (): void => void saveSettings({ theme: effective === 'dark' ? 'light' : 'dark' })
 
   return (
     <header className="header">
@@ -32,12 +28,8 @@ export function Header({ onOpenSettings }: { onOpenSettings: () => void }): Reac
         >
           {settings.language === 'zh' ? '繁' : 'EN'}
         </button>
-        <button
-          className="icon-btn"
-          onClick={() => void saveSettings({ theme: nextTheme })}
-          title={t(`settings.theme.${settings.theme}`)}
-        >
-          {themeIcons[settings.theme]}
+        <button className="icon-btn" onClick={toggleTheme} title={t(`settings.theme.${effective}`)}>
+          {effective === 'dark' ? <IconMoon /> : <IconSun />}
         </button>
         <button className="icon-btn" onClick={onOpenSettings} title={t('settings.title')}>
           <IconGear />

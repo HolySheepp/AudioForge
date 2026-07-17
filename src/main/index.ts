@@ -37,6 +37,8 @@ function createWindow(): void {
     title: 'AudioForge',
     autoHideMenuBar: true,
     backgroundColor: resolveThemeBg(getSettings().theme),
+    // 打包版圖示已嵌入 exe;開發模式(npx electron .)額外指定,避免顯示 Electron 預設圖示
+    icon: app.isPackaged ? undefined : join(app.getAppPath(), 'build', 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

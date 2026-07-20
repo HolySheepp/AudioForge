@@ -34,6 +34,9 @@ npm run dev            # 開發模式直接試
 npm run dist           # 打包 NSIS 安裝包(release/)
 ```
 
+開發相關的細節、已知坑、版本流程約定見 [docs/DEV-NOTES.md](docs/DEV-NOTES.md);
+原始規格文件見 [docs/PROMPT.md](docs/PROMPT.md)。
+
 ## 開發
 
 ```bash

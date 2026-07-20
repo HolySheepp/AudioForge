@@ -55,7 +55,7 @@ export function PreviewPanel(): React.JSX.Element {
   const drag = useRef<{
     mode: 'line' | 'pan'
     startX: number
-    startTime: number
+    startView: number
     lineFrac: number
     samples: { t: number; x: number }[]
   } | null>(null)
@@ -246,19 +246,26 @@ export function PreviewPanel(): React.JSX.Element {
     drag.current = {
       mode,
       startX: e.clientX,
-      startTime: ct,
+      startView: viewStart.current,
       lineFrac: clamp((ct - viewStart.current) / gm.winLen, 0, 1),
       samples: [{ t: performance.now(), x: e.clientX }]
     }
     if (mode === 'line') setTime(viewStart.current + (px / gm.w) * gm.winLen)
   }
 
-  /** 平移:以時間為錨(而非視窗左緣),讓播放頭在視窗任一位置都能走到 0 與結尾 */
-  const panTo = (time: number, lineFrac: number, gm: NonNullable<ReturnType<typeof geom>>): boolean => {
-    const t2 = clamp(time, 0, gm.dur)
-    viewStart.current = clamp(t2 - lineFrac * gm.winLen, 0, gm.maxView)
-    setTime(t2)
-    return t2 <= 0 || t2 >= gm.dur
+  /**
+   * 平移:只動可視窗,播放頭的螢幕位置完全固定(時間隨線底下的內容而變)。
+   * 拖到頭/尾後繼續拖,視窗與線都不再移動。回傳是否已撞到邊界。
+   */
+  const panTo = (
+    viewTarget: number,
+    lineFrac: number,
+    gm: NonNullable<ReturnType<typeof geom>>
+  ): boolean => {
+    const vs = clamp(viewTarget, 0, gm.maxView)
+    viewStart.current = vs
+    setTime(vs + lineFrac * gm.winLen)
+    return vs <= 0 || vs >= gm.maxView
   }
 
   const onMove = (e: React.PointerEvent<HTMLCanvasElement>): void => {
@@ -276,7 +283,7 @@ export function PreviewPanel(): React.JSX.Element {
     } else {
       // 平移:內容隨手指移動(往右拖 = 回到更早的時間),播放頭維持在原螢幕位置
       const dx = e.clientX - d.startX
-      panTo(d.startTime - (dx / gm.w) * gm.winLen, d.lineFrac, gm)
+      panTo(d.startView - (dx / gm.w) * gm.winLen, d.lineFrac, gm)
     }
   }
 
@@ -300,12 +307,11 @@ export function PreviewPanel(): React.JSX.Element {
     inertia.current.last = performance.now()
     const tick = (nowT: number): void => {
       const g2 = geom()
-      const media = videoRef.current
-      if (!g2 || !media) return stopInertia()
+      if (!g2) return stopInertia()
       const dd = Math.min(0.05, (nowT - inertia.current.last) / 1000)
       inertia.current.last = nowT
       const hitEdge = panTo(
-        media.currentTime + inertia.current.vel * dd,
+        viewStart.current + inertia.current.vel * dd,
         inertia.current.lineFrac,
         g2
       )

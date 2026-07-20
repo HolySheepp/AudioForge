@@ -163,7 +163,7 @@ export function PreviewPanel(): React.JSX.Element {
     if (dur > 0) {
       const lineX = ((ct - vs) / winLen) * w
       if (lineX >= -1 && lineX <= w + 1) {
-        // 線貫穿整個高度(超出波形帶),兩端各一個朝內的三角形
+        // 線貫穿整個高度(超出波形帶)
         g.strokeStyle = textCol
         g.lineWidth = 2
         g.beginPath()
@@ -171,20 +171,26 @@ export function PreviewPanel(): React.JSX.Element {
         g.lineTo(lineX, h)
         g.stroke()
 
-        const tri = 6
-        g.fillStyle = textCol
+        // 兩端的三角形手把:位置夾在畫布內,線在最左/最右時手把仍完整可見、可辨識可拖
+        const tri = 7
+        const handleX = clamp(lineX, tri + 1, w - tri - 1)
+        g.fillStyle = accent
+        g.strokeStyle = css.getPropertyValue('--bg').trim() || '#000'
+        g.lineWidth = 1
         g.beginPath()
-        g.moveTo(lineX - tri, 0)
-        g.lineTo(lineX + tri, 0)
-        g.lineTo(lineX, tri + 2)
+        g.moveTo(handleX - tri, 0)
+        g.lineTo(handleX + tri, 0)
+        g.lineTo(handleX, tri + 3)
         g.closePath()
         g.fill()
+        g.stroke()
         g.beginPath()
-        g.moveTo(lineX - tri, h)
-        g.lineTo(lineX + tri, h)
-        g.lineTo(lineX, h - tri - 2)
+        g.moveTo(handleX - tri, h)
+        g.lineTo(handleX + tri, h)
+        g.lineTo(handleX, h - tri - 3)
         g.closePath()
         g.fill()
+        g.stroke()
       }
       // 邊緣時間標記
       g.fillStyle = dimCol

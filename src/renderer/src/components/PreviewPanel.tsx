@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
 import { toMediaUrl } from '../utils/media'
@@ -8,12 +9,29 @@ interface PreviewState {
   kind: 'video' | 'audio'
 }
 
+/** 抓取播放頭線的像素容差:游標落在線左右此範圍內 → 拖線微調,否則拖時間軸平移 */
+const GRAB_PX = 24
+const FLICK_THRESHOLD = 700
+const PAN_FRICTION = 3
+const WINDOW_OPTIONS = [15, 30, 60, 120, 300]
+
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v))
+
+function fmtClock(sec: number): string {
+  if (!Number.isFinite(sec)) return '0:00'
+  const s = Math.max(0, Math.floor(sec))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 export function PreviewPanel(): React.JSX.Element {
   const t = useT()
   const selectedPath = useApp((s) => s.selectedPath)
   const tool = useApp((s) => s.tool)
   const source = useApp((s) => s.source)
   const processed = useApp((s) => s.processed)
+  const replaceAudio = useApp((s) => s.replaceAudio)
+  const windowSec = useApp((s) => s.settings?.previewWindowSec ?? 60)
+  const saveSettings = useApp((s) => s.saveSettings)
 
   const item = source.find((it) => it.path === selectedPath) ?? null
   const info = item?.info ?? processed.find((p) => p.path === selectedPath)?.info ?? null
@@ -25,27 +43,41 @@ export function PreviewPanel(): React.JSX.Element {
   const [error, setError] = useState(false)
   const [peaks, setPeaks] = useState<number[] | null>(null)
   const [ab, setAb] = useState<'original' | 'new'>('original')
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const bAudioRef = useRef<HTMLAudioElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef = useRef(0)
 
-  // 選擇檔案 → 載入預覽與波形
+  // 時間軸可視窗左緣(秒);拖曳/慣性都改這個 ref,不觸發 React 重繪
+  const viewStart = useRef(0)
+  const drag = useRef<{
+    mode: 'line' | 'pan'
+    startX: number
+    startView: number
+    lineFrac: number
+    samples: { t: number; x: number }[]
+  } | null>(null)
+  const inertia = useRef({ raf: 0, vel: 0, last: 0, lineFrac: 0 })
+
+  const windowSecRef = useRef(windowSec)
+  windowSecRef.current = windowSec
+
+  // ===== 選擇檔案 → 載入預覽與波形(收合時完全不載入,避免無謂解碼/proxy) =====
   useEffect(() => {
     setPreview(null)
     setPeaks(null)
     setError(false)
     setGenFrac(null)
     setAb('original')
-    if (!selectedPath) return
+    viewStart.current = 0
+    if (collapsed || !selectedPath) return
     let alive = true
     setLoading(true)
     window.api
       .ensurePreview(selectedPath)
-      .then((r) => {
-        if (alive) setPreview({ url: r.url, kind: r.kind })
-      })
+      .then((r) => alive && setPreview({ url: r.url, kind: r.kind }))
       .catch(() => alive && setError(true))
       .finally(() => alive && setLoading(false))
     if (info) {
@@ -57,23 +89,28 @@ export function PreviewPanel(): React.JSX.Element {
     return () => {
       alive = false
     }
-  }, [selectedPath, info?.mtimeMs])
+  }, [selectedPath, info?.mtimeMs, collapsed])
 
-  // proxy 產生進度
   useEffect(() => {
     return window.api.onPreviewProgress(({ path, frac }) => {
       if (path === selectedPath) setGenFrac(frac)
     })
   }, [selectedPath])
 
-  // 波形繪製(peaks + 播放頭 + true peak 參考線)
+  const stopInertia = (): void => {
+    if (inertia.current.raf) cancelAnimationFrame(inertia.current.raf)
+    inertia.current.raf = 0
+  }
+
+  // ===== 繪製:視窗化波形切片 + 播放頭線 + 邊緣時間 =====
   const draw = useCallback(() => {
     const canvas = canvasRef.current
+    const media = videoRef.current
     if (!canvas) return
     const dpr = window.devicePixelRatio || 1
     const w = canvas.clientWidth
     const h = canvas.clientHeight
-    if (canvas.width !== w * dpr) {
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
       canvas.width = w * dpr
       canvas.height = h * dpr
     }
@@ -82,144 +119,177 @@ export function PreviewPanel(): React.JSX.Element {
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
     g.clearRect(0, 0, w, h)
     const css = getComputedStyle(document.documentElement)
+    const accent = css.getPropertyValue('--accent').trim() || '#4f8cff'
+    const textCol = css.getPropertyValue('--text').trim() || '#fff'
+    const dimCol = css.getPropertyValue('--text-dim').trim() || '#999'
     const mid = h / 2
 
-    if (peaks) {
-      g.strokeStyle = css.getPropertyValue('--accent').trim() || '#4f8cff'
+    const dur = media?.duration && Number.isFinite(media.duration) ? media.duration : 0
+    const winLen = dur > 0 ? Math.min(windowSecRef.current, dur) : windowSecRef.current
+    const maxView = Math.max(0, dur - winLen)
+    const ct = media?.currentTime ?? 0
+
+    // 播放中且未拖曳:播放頭離開視窗就翻頁,讓線保持可見
+    if (!drag.current && !inertia.current.raf && dur > winLen) {
+      if (ct < viewStart.current || ct > viewStart.current + winLen) {
+        viewStart.current = clamp(ct - winLen * 0.1, 0, maxView)
+      }
+    }
+    viewStart.current = clamp(viewStart.current, 0, maxView)
+    const vs = viewStart.current
+
+    // 波形(把整檔 2000 bucket 依可視窗切片、拉伸填滿寬度)
+    if (peaks && dur > 0) {
+      const n = peaks.length / 2
+      g.strokeStyle = accent
       g.globalAlpha = 0.85
       g.lineWidth = 1
-      const n = peaks.length / 2
       g.beginPath()
-      for (let i = 0; i < n; i++) {
-        const x = (i / n) * w
-        const min = peaks[i * 2]
-        const max = peaks[i * 2 + 1]
-        g.moveTo(x, mid - max * (mid - 2))
-        g.lineTo(x, mid - min * (mid - 2))
+      for (let x = 0; x < w; x++) {
+        const tSec = vs + (x / w) * winLen
+        const bucket = Math.min(n - 1, Math.max(0, Math.floor((tSec / dur) * n)))
+        const min = peaks[bucket * 2]
+        const max = peaks[bucket * 2 + 1]
+        g.moveTo(x + 0.5, mid - max * (mid - 2))
+        g.lineTo(x + 0.5, mid - min * (mid - 2))
       }
       g.stroke()
       g.globalAlpha = 1
+    }
 
-      // true peak 參考線(有分析結果時)
-      const tp = item?.analysis?.truePeak
-      if (tp != null) {
-        const amp = Math.pow(10, tp / 20)
-        const y = mid - amp * (mid - 2)
-        g.strokeStyle =
-          tp > -1
-            ? css.getPropertyValue('--danger').trim() || '#ff5c5c'
-            : css.getPropertyValue('--warning').trim() || '#ffb648'
-        g.setLineDash([4, 3])
+    // 播放頭線
+    if (dur > 0) {
+      const lineX = ((ct - vs) / winLen) * w
+      if (lineX >= 0 && lineX <= w) {
+        g.strokeStyle = textCol
+        g.lineWidth = 1.5
         g.beginPath()
-        g.moveTo(0, y)
-        g.lineTo(w, y)
-        g.moveTo(0, h - y)
-        g.lineTo(w, h - y)
+        g.moveTo(lineX, 0)
+        g.lineTo(lineX, h)
         g.stroke()
-        g.setLineDash([])
       }
+      // 邊緣時間標記
+      g.fillStyle = dimCol
+      g.font = '10px system-ui, sans-serif'
+      g.fillText(fmtClock(vs), 3, h - 4)
+      const rightLabel = fmtClock(vs + winLen)
+      g.fillText(rightLabel, w - g.measureText(rightLabel).width - 3, h - 4)
     }
+  }, [peaks])
 
-    // 播放頭
-    const media = videoRef.current
-    if (media && media.duration > 0) {
-      const x = (media.currentTime / media.duration) * w
-      g.strokeStyle = css.getPropertyValue('--text').trim() || '#fff'
-      g.lineWidth = 1.5
-      g.beginPath()
-      g.moveTo(x, 0)
-      g.lineTo(x, h)
-      g.stroke()
-    }
-  }, [peaks, item?.analysis?.truePeak])
-
+  // rAF 迴圈:僅在展開且有預覽時運轉(收合 = 零運算)
   useEffect(() => {
-    draw()
+    if (collapsed || !preview) return
     const loop = (): void => {
       draw()
       rafRef.current = requestAnimationFrame(loop)
     }
     rafRef.current = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [draw])
+  }, [collapsed, preview, draw])
 
-  // ===== 時間軸拖動(scrub)+ 甩動慣性 =====
-  const scrub = useRef<{ samples: { t: number; x: number }[] } | null>(null)
-  const inertiaRaf = useRef(0)
-  const inertiaVel = useRef(0) // px/s
-  const inertiaLast = useRef(0)
-
-  const stopTimelineInertia = (): void => {
-    if (inertiaRaf.current) cancelAnimationFrame(inertiaRaf.current)
-    inertiaRaf.current = 0
+  // ===== 互動 =====
+  const syncB = (ct: number): void => {
+    if (ab === 'new' && bAudioRef.current) bAudioRef.current.currentTime = ct
   }
-  useEffect(() => stopTimelineInertia, [selectedPath])
-
-  const seekToX = (clientX: number, el: HTMLCanvasElement): void => {
+  const setTime = (sec: number): void => {
     const media = videoRef.current
     if (!media || !media.duration) return
-    const rect = el.getBoundingClientRect()
-    const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-    media.currentTime = frac * media.duration
-    if (ab === 'new' && bAudioRef.current) bAudioRef.current.currentTime = media.currentTime
+    const ct = clamp(sec, 0, media.duration)
+    media.currentTime = ct
+    syncB(ct)
   }
 
-  const onWaveDown = (e: React.PointerEvent<HTMLCanvasElement>): void => {
+  const geom = (): { w: number; dur: number; winLen: number; maxView: number } | null => {
+    const canvas = canvasRef.current
+    const media = videoRef.current
+    if (!canvas || !media || !media.duration) return null
+    const w = canvas.getBoundingClientRect().width
+    const dur = media.duration
+    const winLen = Math.min(windowSecRef.current, dur)
+    return { w, dur, winLen, maxView: Math.max(0, dur - winLen) }
+  }
+
+  const onDown = (e: React.PointerEvent<HTMLCanvasElement>): void => {
     if (e.button !== 0) return
-    stopTimelineInertia()
+    stopInertia()
+    const gm = geom()
+    if (!gm) return
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    scrub.current = { samples: [{ t: performance.now(), x: e.clientX }] }
-    seekToX(e.clientX, e.currentTarget)
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = e.clientX - rect.left
+    const ct = videoRef.current!.currentTime
+    const lineX = ((ct - viewStart.current) / gm.winLen) * gm.w
+
+    // 媒體短於視窗 → 無從平移,一律拖線;否則看游標離線遠近決定
+    const mode: 'line' | 'pan' =
+      gm.dur <= gm.winLen || Math.abs(px - lineX) <= GRAB_PX ? 'line' : 'pan'
+
+    drag.current = {
+      mode,
+      startX: e.clientX,
+      startView: viewStart.current,
+      lineFrac: (ct - viewStart.current) / gm.winLen,
+      samples: [{ t: performance.now(), x: e.clientX }]
+    }
+    if (mode === 'line') setTime(viewStart.current + (px / gm.w) * gm.winLen)
   }
 
-  const onWaveMove = (e: React.PointerEvent<HTMLCanvasElement>): void => {
-    const s = scrub.current
-    if (!s) return
+  const onMove = (e: React.PointerEvent<HTMLCanvasElement>): void => {
+    const d = drag.current
+    const gm = geom()
+    if (!d || !gm) return
     const now = performance.now()
-    s.samples.push({ t: now, x: e.clientX })
-    while (s.samples.length > 2 && now - s.samples[0].t > 100) s.samples.shift()
-    seekToX(e.clientX, e.currentTarget)
+    d.samples.push({ t: now, x: e.clientX })
+    while (d.samples.length > 2 && now - d.samples[0].t > 100) d.samples.shift()
+
+    if (d.mode === 'line') {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const px = clamp(e.clientX - rect.left, 0, gm.w)
+      setTime(viewStart.current + (px / gm.w) * gm.winLen)
+    } else {
+      // 平移:視窗左緣隨拖曳反向移動;播放頭固定在原螢幕位置(故 currentTime 跟著粗調)
+      const dx = e.clientX - d.startX
+      viewStart.current = clamp(d.startView - (dx / gm.w) * gm.winLen, 0, gm.maxView)
+      setTime(viewStart.current + d.lineFrac * gm.winLen)
+    }
   }
 
-  const onWaveUp = (e: React.PointerEvent<HTMLCanvasElement>): void => {
-    const s = scrub.current
-    if (!s) return
-    scrub.current = null
-    // 快甩鬆手 → 時間軸慣性滑動(摩擦衰減,節流到每影格一次 seek)
+  const onUp = (): void => {
+    const d = drag.current
+    drag.current = null
+    if (!d || d.mode !== 'pan') return // 拖線無慣性;僅時間軸平移有
+
     const cutoff = performance.now() - 120
-    const recent = s.samples.filter((p) => p.t >= cutoff)
+    const recent = d.samples.filter((p) => p.t >= cutoff)
     if (recent.length < 2) return
     const dt = (recent[recent.length - 1].t - recent[0].t) / 1000
     if (dt <= 0.005) return
     const vx = (recent[recent.length - 1].x - recent[0].x) / dt
-    if (Math.abs(vx) < 800) return
+    if (Math.abs(vx) < FLICK_THRESHOLD) return
 
-    const canvas = e.currentTarget
-    inertiaVel.current = vx
-    inertiaLast.current = performance.now()
-    const tick = (now: number): void => {
-      const media = videoRef.current
-      if (!media || !media.duration) return
-      const d = Math.min(0.05, (now - inertiaLast.current) / 1000)
-      inertiaLast.current = now
-      const pxPerSec = canvas.getBoundingClientRect().width / media.duration
-      let next = media.currentTime + (inertiaVel.current / pxPerSec) * d
-      inertiaVel.current *= Math.exp(-3 * d)
-      const hitEdge = next <= 0 || next >= media.duration
-      next = Math.min(media.duration, Math.max(0, next))
-      media.currentTime = next
-      if (ab === 'new' && bAudioRef.current) bAudioRef.current.currentTime = next
-      if (hitEdge || Math.abs(inertiaVel.current) < 40) {
-        stopTimelineInertia()
-        return
-      }
-      inertiaRaf.current = requestAnimationFrame(tick)
+    const gm = geom()
+    if (!gm) return
+    inertia.current.vel = -(vx / gm.w) * gm.winLen // 視窗左緣的速度(秒/秒)
+    inertia.current.lineFrac = d.lineFrac
+    inertia.current.last = performance.now()
+    const tick = (nowT: number): void => {
+      const g2 = geom()
+      if (!g2) return stopInertia()
+      const dd = Math.min(0.05, (nowT - inertia.current.last) / 1000)
+      inertia.current.last = nowT
+      const next = clamp(viewStart.current + inertia.current.vel * dd, 0, g2.maxView)
+      const hitEdge = next <= 0 || next >= g2.maxView
+      viewStart.current = next
+      setTime(next + inertia.current.lineFrac * g2.winLen)
+      inertia.current.vel *= Math.exp(-PAN_FRICTION * dd)
+      if (hitEdge || Math.abs(inertia.current.vel) < 0.5) return stopInertia()
+      inertia.current.raf = requestAnimationFrame(tick)
     }
-    inertiaRaf.current = requestAnimationFrame(tick)
+    inertia.current.raf = requestAnimationFrame(tick)
   }
 
-  // A/B:B 模式 = 影片靜音 + 新音軌同步播放
-  const replaceAudio = useApp((s) => s.replaceAudio)
+  // ===== A/B(影片靜音 + 新音軌同步) =====
   const canAb = tool === 'replace' && Boolean(replaceAudio) && preview?.kind === 'video'
   const setAbMode = (mode: 'original' | 'new'): void => {
     setAb(mode)
@@ -246,6 +316,14 @@ export function PreviewPanel(): React.JSX.Element {
     }
   }
 
+  // 右鍵選單關閉
+  useEffect(() => {
+    if (!menu) return
+    const close = (): void => setMenu(null)
+    window.addEventListener('mousedown', close)
+    return () => window.removeEventListener('mousedown', close)
+  }, [menu])
+
   return (
     <section className={`preview${collapsed ? ' collapsed' : ''}`}>
       <div className="preview-head" onClick={() => setCollapsed(!collapsed)}>
@@ -253,10 +331,7 @@ export function PreviewPanel(): React.JSX.Element {
         <div className="preview-head-right">
           {canAb && !collapsed && (
             <div className="ab-toggle" onClick={(e) => e.stopPropagation()}>
-              <button
-                className={ab === 'original' ? 'active' : ''}
-                onClick={() => setAbMode('original')}
-              >
+              <button className={ab === 'original' ? 'active' : ''} onClick={() => setAbMode('original')}>
                 {t('preview.original')}
               </button>
               <button className={ab === 'new' ? 'active' : ''} onClick={() => setAbMode('new')}>
@@ -290,21 +365,42 @@ export function PreviewPanel(): React.JSX.Element {
                 onPause={onPause}
                 onSeeked={onSeeked}
               />
-              {canAb && replaceAudio && (
-                <audio ref={bAudioRef} src={toMediaUrl(replaceAudio)} />
-              )}
+              {canAb && replaceAudio && <audio ref={bAudioRef} src={toMediaUrl(replaceAudio)} />}
               <canvas
                 className="preview-wave"
                 ref={canvasRef}
-                onPointerDown={onWaveDown}
-                onPointerMove={onWaveMove}
-                onPointerUp={onWaveUp}
-                onPointerCancel={onWaveUp}
+                onPointerDown={onDown}
+                onPointerMove={onMove}
+                onPointerUp={onUp}
+                onPointerCancel={onUp}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setMenu({ x: e.clientX, y: e.clientY })
+                }}
               />
             </>
           )}
         </div>
       )}
+      {menu &&
+        createPortal(
+          <div className="knob-menu" style={{ left: menu.x, top: menu.y }}>
+            <span>{t('preview.window')}</span>
+            {WINDOW_OPTIONS.map((s) => (
+              <button
+                key={s}
+                className={s === windowSec ? 'active' : ''}
+                onClick={() => {
+                  void saveSettings({ previewWindowSec: s })
+                  setMenu(null)
+                }}
+              >
+                {s}s
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </section>
   )
 }

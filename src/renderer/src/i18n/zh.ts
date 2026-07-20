@@ -175,6 +175,7 @@ export const zh = {
 
   // 預覽
   'preview.title': '預覽',
+  'preview.window': '時間軸長度',
   'preview.generating': '產生預覽中…',
   'preview.original': '原音軌',
   'preview.new': '新音軌',

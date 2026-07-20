@@ -161,6 +161,7 @@ export const en: Record<I18nKey, string> = {
   'settings.hwEncoderNone': 'None (CPU)',
 
   'preview.title': 'Preview',
+  'preview.window': 'Timeline span',
   'preview.generating': 'Generating preview…',
   'preview.original': 'Original',
   'preview.new': 'New audio',

@@ -111,6 +111,8 @@ export interface Settings {
   soundId: string
   /** 播放時機:每個檔案完成一次 / 整批佇列完成一次 */
   soundTiming: 'perFile' | 'batch'
+  /** 預覽時間軸的可視窗長度(秒);超過此長度的媒體才啟用平移 */
+  previewWindowSec: number
   /** 各功能面板上次使用的參數 */
   toolParams: Record<string, Record<string, unknown>>
   /** 各旋鈕的棘輪步進選擇(key = 旋鈕 id) */
@@ -130,6 +132,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hapticWaveform: 0,
   soundId: '',
   soundTiming: 'perFile',
+  previewWindowSec: 60,
   toolParams: {},
   knobSteps: {}
 }

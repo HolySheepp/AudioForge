@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
@@ -25,12 +25,29 @@ const FLICK_THRESHOLD = 900
 const FRICTION = 3
 const ANGLE_RANGE = 270 // -135° ~ +135°
 
+/**
+ * 齒間張力最多推進到「一齒角度」的幾成。必須 < 0.5,否則指針在吸附前就越過了
+ * 下一齒的位置,放開時會往回彈——step 越小這個現象越明顯(0.1 時齒距僅 0.9°)。
+ * 因為是比例而非固定度數,任何 step 都不會彈回。
+ */
+const TENSION_RATIO = 0.34
+/** 張力角度上限:齒距很大時(step 1)不要讓指針飄太遠 */
+const TENSION_MAX_DEG = 4
+
+/**
+ * 跨齒不是瞬移,而是用彈簧把「落後量」拉回 0:自然頻率 rad/s + 阻尼比。
+ * 阻尼比 < 1 會有約一成過衝,看起來就是指針彈過棘齒才咬合。
+ * 現值約 120ms 內收斂——夠快不拖泥,又足以讓眼睛看見那一下移動。
+ */
+const SNAP_OMEGA = 52
+const SNAP_ZETA = 0.6
+/** 落後量上限(齒數):快速連轉時不要累積成大幅拖尾 */
+const LAG_CAP_DETENTS = 1.2
+
 interface DragState {
   startY: number
   startValue: number
   samples: { t: number; y: number }[]
-  /** 拖曳中累積的未吸附偏移(做齒間張力視覺) */
-  tension: number
 }
 
 export function Knob({
@@ -53,7 +70,6 @@ export function Knob({
   const [editText, setEditText] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
-  const [tension, setTension] = useState(0)
   const [freeSpin, setFreeSpin] = useState(false)
 
   const drag = useRef<DragState | null>(null)
@@ -65,8 +81,77 @@ export function Knob({
   const rootRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // 指針角度不走 React state:每幀 setState 會讓整個旋鈕重繪,這裡只需要改一個
+  // transform。角度 = 值對應角 + 落後量(彈簧回正) + 齒間張力。
+  const needleRef = useRef<SVGGElement>(null)
+  const lagRef = useRef(0) // 度,指針目前落後真實角度多少
+  const lagVel = useRef(0) // 度/秒
+  const tensionRef = useRef(0) // 度
+  const settleRaf = useRef(0)
+  const lastSettle = useRef(0)
+  const shownRef = useRef(0) // 上一幀實際畫出來的角度,跨齒彈簧的起點
+
   const clamp = (v: number): number => Math.min(max, Math.max(min, v))
   const snap = (v: number): number => clamp(Math.round(v / step) * step)
+
+  /** 一齒在錶面上佔多少角度——張力幅度與落後上限都以它為基準 */
+  const detentAngle = (step / (max - min)) * ANGLE_RANGE
+
+  const angleOf = (v: number): number =>
+    -ANGLE_RANGE / 2 + ((v - min) / (max - min)) * ANGLE_RANGE
+
+  const paint = (): void => {
+    const a = angleOf(valueRef.current) + lagRef.current + tensionRef.current
+    shownRef.current = a
+    needleRef.current?.setAttribute('transform', `rotate(${a} 36 36)`)
+  }
+  // value 由外部驅動(props),每次 render 後補畫一次。必須是 layout effect:
+  // React 會在 commit 時把 transform 重設回無落後量的角度,若等到 paint 之後才修正,
+  // 跨齒那一幀會先閃一下正確終點,彈簧效果就毀了
+  useLayoutEffect(paint)
+
+  const stopSettle = (): void => {
+    if (settleRaf.current) cancelAnimationFrame(settleRaf.current)
+    settleRaf.current = 0
+    lagRef.current = 0
+    lagVel.current = 0
+  }
+
+  /**
+   * 跨齒:把指針釘在「跨齒前那一幀實際畫出來的位置」(記為落後量),再用彈簧高速
+   * 拉到新齒。以實畫角度為起點是必要的——跨齒瞬間齒間張力會從 +span 翻到 −span,
+   * 只補償值的位移會讓指針先倒退一下。
+   */
+  const springTo = (targetAngle: number): void => {
+    const cap = detentAngle * LAG_CAP_DETENTS
+    const lag = shownRef.current - targetAngle
+    lagRef.current = Math.min(cap, Math.max(-cap, lag))
+    if (settleRaf.current) return // 已在回正,新的落後量已寫入 lagRef
+    lastSettle.current = performance.now()
+    settleRaf.current = requestAnimationFrame(settleTick)
+  }
+
+  /** 值變更後立即改寫 valueRef 並重畫;props 要下一次 render 才會到 */
+  const commit = (next: number): void => {
+    onChange(next)
+    valueRef.current = next
+    paint()
+  }
+
+  const settleTick = (now: number): void => {
+    const dt = Math.min(0.04, (now - lastSettle.current) / 1000)
+    lastSettle.current = now
+    const a = -SNAP_OMEGA * SNAP_OMEGA * lagRef.current - 2 * SNAP_ZETA * SNAP_OMEGA * lagVel.current
+    lagVel.current += a * dt
+    lagRef.current += lagVel.current * dt
+    if (Math.abs(lagRef.current) < 0.03 && Math.abs(lagVel.current) < 1) {
+      stopSettle()
+      paint()
+      return
+    }
+    paint()
+    settleRaf.current = requestAnimationFrame(settleTick)
+  }
 
   const stopInertia = (): void => {
     if (raf.current) cancelAnimationFrame(raf.current)
@@ -76,6 +161,8 @@ export function Knob({
 
   // 慣性(無阻力)模式:rAF 迴圈,摩擦衰減,撞邊界或速度耗盡即停,停下時吸附到齒
   const startInertia = (velValuePerSec: number): void => {
+    // 無阻力模式本來就是連續移動,不需要(也不該)再疊跨齒的彈簧落後
+    stopSettle()
     inertiaVel.current = velValuePerSec
     lastFrame.current = performance.now()
     setFreeSpin(true)
@@ -86,9 +173,11 @@ export function Knob({
       inertiaVel.current *= Math.exp(-FRICTION * dt)
       const hitEdge = v <= min || v >= max
       v = clamp(v)
-      onChange(v)
+      commit(v)
       if (hitEdge || Math.abs(inertiaVel.current) < step * 0.8) {
-        onChange(snap(v))
+        const rest = snap(v)
+        springTo(angleOf(rest)) // 最後咬合到齒也走彈簧,不要瞬移
+        commit(rest)
         // 慣性結束、重新咬合棘輪 → 補一發觸覺 tick
         window.api.hapticTick()
         stopInertia()
@@ -99,7 +188,13 @@ export function Knob({
     raf.current = requestAnimationFrame(tick)
   }
 
-  useEffect(() => () => stopInertia(), [])
+  useEffect(
+    () => () => {
+      stopInertia()
+      stopSettle()
+    },
+    []
+  )
 
   const onPointerDown = (e: React.PointerEvent): void => {
     if (e.button !== 0 || editing) return
@@ -108,8 +203,7 @@ export function Knob({
     drag.current = {
       startY: e.clientY,
       startValue: valueRef.current,
-      samples: [{ t: performance.now(), y: e.clientY }],
-      tension: 0
+      samples: [{ t: performance.now(), y: e.clientY }]
     }
   }
 
@@ -123,17 +217,26 @@ export function Knob({
     const dy = d.startY - e.clientY
     const rawDetents = dy / PX_PER_DETENT
     const whole = Math.round(rawDetents)
-    setTension(rawDetents - whole) // 齒間張力,做微小的視覺旋轉
+    // 齒間張力:幅度取「一齒角度」的固定比例(上限 TENSION_MAX_DEG),
+    // 所以 step 0.1 / 0.5 / 1 各自有相稱的預備行程,不會有小 step 越界再彈回
+    const span = Math.min(detentAngle * TENSION_RATIO, TENSION_MAX_DEG)
+    tensionRef.current = (rawDetents - whole) * 2 * span
     const next = clamp(d.startValue + whole * step)
-    if (next !== valueRef.current) window.api.hapticTick() // 跨齒 → 觸覺回饋
-    onChange(next)
+    if (next !== valueRef.current) {
+      window.api.hapticTick() // 跨齒 → 觸覺回饋
+      springTo(angleOf(next) + tensionRef.current)
+    }
+    commit(next)
   }
 
   const onPointerUp = (): void => {
     const d = drag.current
     if (!d) return
     drag.current = null
-    setTension(0)
+    // 放手時張力歸零也是一段位移,同樣交給彈簧(springTo 需在 tension 清掉前呼叫)
+    springTo(angleOf(valueRef.current))
+    tensionRef.current = 0
+    paint()
     // 釋放速度(px/s)→ 超過門檻進入無阻力慣性;只取最後 120ms 的樣本,避免慢拖稀釋末段甩速
     const cutoff = performance.now() - 120
     const recent = d.samples.filter((s) => s.t >= cutoff)
@@ -153,8 +256,11 @@ export function Knob({
   const onWheel = (e: React.WheelEvent): void => {
     stopInertia()
     const next = snap(valueRef.current + (e.deltaY < 0 ? step : -step))
-    if (next !== valueRef.current) window.api.hapticTick()
-    onChange(next)
+    if (next !== valueRef.current) {
+      window.api.hapticTick()
+      springTo(angleOf(next))
+    }
+    commit(next)
   }
 
   const beginEdit = (): void => {
@@ -186,9 +292,6 @@ export function Knob({
     }
   }, [menuOpen])
 
-  const frac = (value - min) / (max - min)
-  const angle = -ANGLE_RANGE / 2 + frac * ANGLE_RANGE + tension * 4
-
   return (
     <div className="knob" ref={rootRef}>
       <span className="knob-label">{label}</span>
@@ -219,8 +322,8 @@ export function Knob({
             const y2 = 36 - Math.cos(a) * 35.5
             return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} className="knob-tick" />
           })}
-          {/* 指針 */}
-          <g transform={`rotate(${angle} 36 36)`}>
+          {/* 指針:角度由 paint() 直接寫 transform(每幀 setState 會整顆旋鈕重繪) */}
+          <g ref={needleRef} transform={`rotate(${angleOf(value)} 36 36)`}>
             <line x1="36" y1="36" x2="36" y2="10" className="knob-needle" />
           </g>
           <circle cx="36" cy="36" r="4" className="knob-hub" />

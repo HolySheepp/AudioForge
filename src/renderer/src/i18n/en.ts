@@ -20,12 +20,11 @@ export const en: Record<I18nKey, string> = {
   'tool.extract.desc': 'Lossless stream copy by default',
   'tool.convert': 'Audio Conversion',
   'tool.convert.desc': 'WAV / MP3 / AAC / FLAC',
-  'tool.multitrack': 'Multi-track Workflow',
-  'tool.multitrack.desc': 'Per-track normalize, mix & write back',
   'tool.mixdown': 'Mixdown',
   'tool.mixdown.desc': 'Mix multiple audio files into one',
 
   'source.title': 'Source Files',
+  'source.multitrackExclusive': 'Multi-track files are processed on their own; checking one clears the rest',
   'source.selectAll': 'Select All',
   'source.selectNone': 'Select None',
   'source.clearAll': 'Clear All',
@@ -63,6 +62,8 @@ export const en: Record<I18nKey, string> = {
   'param.replace.length': 'Length handling',
   'param.replace.keepVideo': 'Keep full video (pad audio with silence)',
   'param.replace.shortest': 'Trim to shortest',
+  'param.replace.target': 'Track to replace',
+  'param.replace.targetAll': 'Replace all tracks',
   'param.replace.codec': 'Audio codec',
   'param.replace.needAudio': 'Check a video, then pick an audio file as the new track',
 
@@ -74,8 +75,6 @@ export const en: Record<I18nKey, string> = {
 
   'param.extract.mode': 'Output format',
   'param.extract.lossless': 'Original (lossless stream copy)',
-  'param.extract.tracks': 'Tracks to extract',
-  'param.extract.track': 'Track {n}',
 
   'param.convert.format': 'Output format',
   'param.convert.bitDepth': 'Bit depth',
@@ -88,7 +87,8 @@ export const en: Record<I18nKey, string> = {
   'param.convert.mono': 'Mono',
   'param.convert.mp3Mode': 'MP3 mode',
 
-  'param.mt.track': 'Track {n}',
+  'param.track': 'Track {n}',
+  'param.tracks': 'Tracks',
   'param.mt.action': 'Action',
   'param.mt.actionNormalize': 'Normalize',
   'param.mt.actionKeep': 'Keep as-is',
@@ -97,8 +97,6 @@ export const en: Record<I18nKey, string> = {
   'param.mt.outputMix': 'Mix into one stereo track',
   'param.mt.outputSeparate': 'Keep tracks separate',
   'param.mt.limiter': 'Safety limiter after mix',
-  'param.mt.needVideo': 'This tool needs a video file with audio tracks',
-  'param.mt.trackCountNote': 'Track layout of the first checked file is applied to all by track order',
 
   'analysis.integrated': 'Integrated',
   'analysis.range': 'Range',

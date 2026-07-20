@@ -22,8 +22,8 @@ npm run smoke
 # 或手動:AUDIOFORGE_SMOKE=1 npx electron .
 ```
 
-自動產生測試媒體,實跑六大功能(analysis/normalize/extract/convert/replace/multitrack/mixdown),
-用 ffprobe/ebur128 驗證輸出。目前 25 項全過。
+自動產生測試媒體,實跑六大功能(analysis/normalize/extract/convert/replace/mixdown),
+含逐軌路徑,用 ffprobe/ebur128 驗證輸出。目前 33 項全過。
 
 另有無頭媒體診斷工具(`src/main/mediatest.ts`),用於排查 `<video>`/`<audio>` 播放問題:
 
@@ -49,6 +49,27 @@ Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '*AudioFo
 
 **版本流程**:改 `package.json` 的 `version` → commit → `git tag vX.Y.Z` → push → 打包 →
 **確認新產物存在後**才刪除 `release/` 裡的舊版本(避免打包失敗時 release/ 一度清空)。
+
+## 逐軌處理(取代原本的 multitrack 功能)
+
+原本「多軌工作流」是側欄上的獨立功能。v0.6.0 起改成**每個功能自己處理多音軌**,
+獨立的 multitrack 功能已移除,其引擎併進 `normalize`。
+
+規則:
+
+- **影片檔**一律展開逐軌介面(即使只有一軌);**純音訊檔**用單軌的簡潔介面。
+  音訊檔的「軌」對使用者沒有意義,多包一層外框只是雜訊。
+- 參數物件同時帶「單軌欄位」與「逐軌陣列」,由 main 的 runner 依實際 probe 結果挑用
+  (`src/main/tools/tracks.ts` 的 `resolveTracks` / `resolveTrackCfgs`)。
+  批次裡混到音訊檔也不會套錯路徑。
+- 逐軌設定以**軌序**為 key 記憶,長度可超過當前檔案軌數——換檔案再換回來設定還在。
+- **多軌與批次互斥**:勾選集合裡最多一個多軌檔,且它入選就獨佔(`store/index.ts` 的
+  `exclusive()`)。使用者親手勾的多軌檔優先獨佔;全選/拖入/probe 完成這類非針對性的
+  變動則讓批次贏。軌數要 probe 完才知道,所以 probe 的 `.then` 也要再收斂一次。
+
+`replace` 的 `targetTrack`:`-1` 換掉全部音軌,`>= 0` 只換該軌、其餘原位 copy。
+多軌時 `-filter:a:N` / `-c:a:N` 的 N 是**輸出**音訊流序號,因為映射保持原軌序,
+所以 N 等於軌序。
 
 ## 技術決策備忘(偏離最初 PROMPT.md 的地方)
 

@@ -6,7 +6,6 @@ import {
   IconConvert,
   IconExtract,
   IconMixdown,
-  IconMultitrack,
   IconNormalize,
   IconReplace
 } from './icons'
@@ -17,8 +16,7 @@ const TOOLS: { id: ToolId; icon: React.JSX.Element }[] = [
   { id: 'replace', icon: <IconReplace /> },
   { id: 'extract', icon: <IconExtract /> },
   { id: 'convert', icon: <IconConvert /> },
-  { id: 'mixdown', icon: <IconMixdown /> },
-  { id: 'multitrack', icon: <IconMultitrack /> }
+  { id: 'mixdown', icon: <IconMixdown /> }
 ]
 
 export function Sidebar(): React.JSX.Element {

@@ -3,13 +3,15 @@ import { resolveOutputPath } from '../output'
 import { getSettings } from '../settings'
 import { FFmpegError, type ToolRunner } from '../queue'
 import { runStage } from './common'
+import { resolveTracks } from './tracks'
 
-/** 音訊轉檔:WAV / MP3 / AAC / FLAC;影片輸入 = 取第一音軌 */
+/** 音訊轉檔:WAV / MP3 / AAC / FLAC;可選多軌,每軌各自輸出一個檔 */
 export const convertRunner: ToolRunner = async (ctx) => {
   const p = ctx.spec.params
   const format = String(p['format'] ?? 'wav')
   const info = await probeFile(ctx.spec.path)
   if (info.audioStreams.length === 0) throw new FFmpegError('no audio stream')
+  const tracks = resolveTracks(p['tracks'], info.audioStreams.length)
 
   let ext: string
   let codecArgs: string[]
@@ -37,15 +39,27 @@ export const convertRunner: ToolRunner = async (ctx) => {
     }
   }
 
-  const args = ['-i', ctx.spec.path, '-map', '0:a:0', '-vn', ...codecArgs]
+  const shared: string[] = [...codecArgs]
   const sr = Number(p['sampleRate'] ?? 0)
-  if (sr > 0) args.push('-ar', String(sr))
+  if (sr > 0) shared.push('-ar', String(sr))
   const ch = Number(p['channels'] ?? 0)
-  if (ch > 0) args.push('-ac', String(ch))
-  args.push('-map_metadata', '0')
+  if (ch > 0) shared.push('-ac', String(ch))
 
-  const out = resolveOutputPath(ctx.spec.path, '_converted', ext, getSettings())
-  ctx.trackOutput(out)
-  await runStage(ctx, [...args, out], info.durationSec, 0, 1)
-  return { outputs: [out] }
+  const outputs: string[] = []
+  const multi = tracks.length > 1
+  for (let k = 0; k < tracks.length; k++) {
+    const i = tracks[k]
+    const suffix = multi ? `_converted_track${i + 1}` : '_converted'
+    const out = resolveOutputPath(ctx.spec.path, suffix, ext, getSettings())
+    ctx.trackOutput(out)
+    await runStage(
+      ctx,
+      ['-i', ctx.spec.path, '-map', `0:a:${i}`, '-vn', ...shared, '-map_metadata', '0', out],
+      info.durationSec,
+      k / tracks.length,
+      (k + 1) / tracks.length
+    )
+    outputs.push(out)
+  }
+  return { outputs }
 }

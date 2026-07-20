@@ -34,16 +34,30 @@ export function loudnormApply(I: number, TP: number, m: LoudnormMeasured): strin
   )
 }
 
-/** ebur128 摘要解析(I / LRA / True peak) */
-export function parseEbur128Summary(
-  stderr: string
-): { integrated: number; range: number; truePeak: number } | null {
-  const tail = stderr.slice(stderr.lastIndexOf('Summary:'))
-  const i = /I:\s+(-?[\d.]+)\s+LUFS/.exec(tail)
-  const lra = /LRA:\s+(-?[\d.]+)\s+LU/.exec(tail)
-  const peak = /Peak:\s+(-?[\d.]+)\s+dBFS/.exec(tail)
-  if (!i || !lra || !peak) return null
-  return { integrated: Number(i[1]), range: Number(lra[1]), truePeak: Number(peak[1]) }
+export interface Ebur128Summary {
+  integrated: number
+  range: number
+  truePeak: number
+}
+
+/**
+ * ebur128 摘要解析。多軌單次測量時 stderr 會有多個 Summary 區塊,
+ * 順序 = filtergraph 宣告順序。
+ */
+export function parseEbur128Summaries(stderr: string): Ebur128Summary[] {
+  const out: Ebur128Summary[] = []
+  // 每個 Summary: 到下一個 Summary:(或字串結尾)為一段
+  const re = /Summary:([\s\S]*?)(?=Summary:|$)/g
+  for (const m of stderr.matchAll(re)) {
+    const seg = m[1]
+    const i = /I:\s+(-?[\d.]+)\s+LUFS/.exec(seg)
+    const lra = /LRA:\s+(-?[\d.]+)\s+LU/.exec(seg)
+    const peak = /Peak:\s+(-?[\d.]+)\s+dBFS/.exec(seg)
+    if (i && lra && peak) {
+      out.push({ integrated: Number(i[1]), range: Number(lra[1]), truePeak: Number(peak[1]) })
+    }
+  }
+  return out
 }
 
 /**

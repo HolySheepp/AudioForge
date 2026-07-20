@@ -283,6 +283,14 @@
   font-size: 11.5px;
   color: var(--text-dim);
 }
+/* 多軌時每軌各一列,軌號用等寬前綴讓數字對齊 */
+.row-analysis-track {
+  font-style: normal;
+  display: inline-block;
+  min-width: 52px;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
 .row-note {
   font-size: 11px;
   color: var(--warning);

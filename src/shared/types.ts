@@ -1,12 +1,8 @@
-/** 功能 ID */
-export type ToolId =
-  | 'analysis'
-  | 'normalize'
-  | 'replace'
-  | 'extract'
-  | 'convert'
-  | 'multitrack'
-  | 'mixdown'
+/**
+ * 功能 ID。各功能自己處理多音軌(影片檔展開逐軌介面),
+ * 因此沒有獨立的 multitrack 功能。
+ */
+export type ToolId = 'analysis' | 'normalize' | 'replace' | 'extract' | 'convert' | 'mixdown'
 
 export interface AudioStreamInfo {
   /** 第幾條音軌(0-based,以音軌計) */
@@ -45,6 +41,12 @@ export interface AnalysisResult {
   truePeak: number
 }
 
+/** 單一音軌的分析結果;多音軌檔案每軌各一筆 */
+export interface TrackAnalysis extends AnalysisResult {
+  /** 第幾條音軌(0-based,以音軌計) */
+  track: number
+}
+
 export interface JobUpdate {
   jobId: string
   itemId: string
@@ -57,8 +59,8 @@ export interface JobUpdate {
   note?: string
   /** 完成時的輸出檔路徑(analysis 為空) */
   outputs?: string[]
-  /** analysis 結果 */
-  analysis?: AnalysisResult
+  /** analysis 結果:逐音軌一筆 */
+  analysis?: TrackAnalysis[]
 }
 
 export interface JobSpec {

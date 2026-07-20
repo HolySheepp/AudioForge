@@ -11,7 +11,7 @@ import { ffmpegPath } from './ffmpeg/paths'
 import { probeFile } from './ffmpeg/probe'
 import { queue } from './queue'
 import { registerAllTools } from './tools'
-import { parseEbur128Summary } from './tools/common'
+import { parseEbur128Summaries } from './tools/common'
 import { hapticTest } from './haptics'
 import type { JobSpec, JobUpdate } from '../shared/types'
 
@@ -38,7 +38,7 @@ async function measureLufs(path: string): Promise<number> {
     ['-hide_banner', '-i', path, '-map', '0:a:0', '-af', 'ebur128=peak=true', '-f', 'null', 'NUL'],
     { windowsHide: true, timeout: 120000, maxBuffer: 32 * 1024 * 1024 }
   ).catch((e: { stderr?: string }) => ({ stderr: e.stderr ?? '' }))
-  const r = parseEbur128Summary(stderr)
+  const [r] = parseEbur128Summaries(stderr)
   return r ? r.integrated : NaN
 }
 
@@ -78,20 +78,37 @@ export async function runSmoke(): Promise<void> {
     '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=8',
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=8',
     '-f', 'lavfi', '-i', 'sine=frequency=880:duration=8',
-    '-map', '0:v', '-map', '1:a', '-map', '2:a',
+    '-filter_complex', '[1:a]volume=0.30[a1];[2:a]volume=0.06[a2]',
+    '-map', '0:v', '-map', '[a1]', '-map', '[a2]',
     '-c:v', 'libx264', '-preset', 'ultrafast',
     '-c:a', 'aac', '-b:a', '192k',
     video
   ])
   check('test media generated', existsSync(wavA) && existsSync(video))
 
-  // ---- 1. analysis ----
+  // ---- 1. analysis(單軌 + 影片雙軌逐軌)----
   const a1 = await runJob(spec('analysis', wavA, {}))
+  const a1t = a1.analysis?.[0]
   check(
     'analysis',
-    a1.status === 'done' && Number.isFinite(a1.analysis?.integrated ?? NaN),
-    `I=${a1.analysis?.integrated} TP=${a1.analysis?.truePeak}`
+    a1.status === 'done' && a1.analysis?.length === 1 && Number.isFinite(a1t?.integrated ?? NaN),
+    `I=${a1t?.integrated} TP=${a1t?.truePeak}`
   )
+
+  const a2 = await runJob(spec('analysis', video, { tracks: [0, 1] }))
+  check(
+    'analysis per-track (2 tracks)',
+    a2.status === 'done' && a2.analysis?.length === 2,
+    a2.analysis?.map((x) => `t${x.track}:${x.integrated.toFixed(1)}`).join(' ') ?? (a2.errorTail ?? '')
+  )
+  if (a2.analysis?.length === 2) {
+    // 兩軌音量刻意不同(440Hz 較大、880Hz 較小),逐軌測量必須測出差異
+    check(
+      'analysis tracks differ',
+      Math.abs(a2.analysis[0].integrated - a2.analysis[1].integrated) > 1,
+      `${a2.analysis[0].integrated} vs ${a2.analysis[1].integrated}`
+    )
+  }
 
   // ---- 2. normalize(wav → -14 LUFS ±0.5)----
   const n1 = await runJob(spec('normalize', wavA, { lufs: -14, tp: -1 }))
@@ -122,6 +139,17 @@ export async function runSmoke(): Promise<void> {
     check('convert mp3 codec', info.audioStreams[0]?.codec === 'mp3')
   }
 
+  // 影片雙軌 → 每軌各輸出一個檔
+  const c2 = await runJob(
+    spec('convert', video, { format: 'wav', wavDepth: '24', sampleRate: 0, channels: 0, tracks: [0, 1] })
+  )
+  check('convert per-track job', c2.status === 'done' && c2.outputs?.length === 2, c2.errorTail ?? '')
+  if (c2.outputs?.[0]) {
+    const info = await probeFile(c2.outputs[0])
+    check('convert per-track wav 24-bit', info.audioStreams[0]?.codec === 'pcm_s24le')
+    check('convert per-track has no video', !info.hasVideo)
+  }
+
   // ---- 4.5 mixdown(兩個 wav 混成一軌)----
   const mx = await runJob(
     spec('mixdown', wavA, {
@@ -144,13 +172,18 @@ export async function runSmoke(): Promise<void> {
   // ---- 5. replace(keepVideo,畫面流 copy)----
   const srcInfo = await probeFile(video)
   const r1 = await runJob(
-    spec('replace', video, { replaceAudioPath: wavB, length: 'keepVideo', codec: 'aac' })
+    spec('replace', video, {
+      replaceAudioPath: wavB,
+      length: 'keepVideo',
+      codec: 'aac',
+      targetTrack: -1
+    })
   )
   check('replace job', r1.status === 'done', r1.errorTail ?? '')
   if (r1.outputs?.[0]) {
     const info = await probeFile(r1.outputs[0])
     check('replace video codec unchanged', info.videoCodec === srcInfo.videoCodec)
-    check('replace single new audio', info.audioStreams.length === 1)
+    check('replace all → single new audio', info.audioStreams.length === 1)
     check(
       'replace duration ≈ video',
       Math.abs((info.durationSec ?? 0) - (srcInfo.durationSec ?? 0)) < 0.5,
@@ -158,7 +191,23 @@ export async function runSmoke(): Promise<void> {
     )
   }
 
-  // ---- 6. multitrack(軌1→-20、軌2→-14;mix 與 separate)----
+  // replace 指定單軌:只換掉軌 2,軌 1 原封不動保留
+  const r2 = await runJob(
+    spec('replace', video, {
+      replaceAudioPath: wavB,
+      length: 'keepVideo',
+      codec: 'aac',
+      targetTrack: 1
+    })
+  )
+  check('replace target-track job', r2.status === 'done', r2.errorTail ?? '')
+  if (r2.outputs?.[0]) {
+    const info = await probeFile(r2.outputs[0])
+    check('replace target keeps track count', info.audioStreams.length === 2, `${info.audioStreams.length}`)
+    check('replace target video copy', info.videoCodec === srcInfo.videoCodec)
+  }
+
+  // ---- 6. normalize 逐軌(軌1→-20、軌2→-14;mix 與 separate)----
   const mtParams = {
     tracks: [
       { action: 'normalize', lufs: -20, tp: -1 },
@@ -167,8 +216,8 @@ export async function runSmoke(): Promise<void> {
     output: 'separate',
     limiter: true
   }
-  const m1 = await runJob(spec('multitrack', video, mtParams))
-  check('multitrack separate job', m1.status === 'done', m1.errorTail ?? '')
+  const m1 = await runJob(spec('normalize', video, mtParams))
+  check('normalize per-track separate job', m1.status === 'done', m1.errorTail ?? '')
   if (m1.outputs?.[0]) {
     const info = await probeFile(m1.outputs[0])
     check('mt separate keeps 2 tracks', info.audioStreams.length === 2)
@@ -178,12 +227,12 @@ export async function runSmoke(): Promise<void> {
       ['-hide_banner', '-i', m1.outputs[0], '-map', '0:a:0', '-af', 'ebur128=peak=true', '-f', 'null', 'NUL'],
       { windowsHide: true, timeout: 120000, maxBuffer: 32 * 1024 * 1024 }
     ).catch((e: { stderr?: string }) => ({ stderr: e.stderr ?? '' }))
-    const t0 = parseEbur128Summary(stderr)?.integrated ?? NaN
+    const t0 = parseEbur128Summaries(stderr)[0]?.integrated ?? NaN
     check('mt track1 → -20 ±0.5', Math.abs(t0 - -20) <= 0.5, `measured ${t0}`)
   }
 
-  const m2 = await runJob(spec('multitrack', video, { ...mtParams, output: 'mix' }))
-  check('multitrack mix job', m2.status === 'done', m2.errorTail ?? '')
+  const m2 = await runJob(spec('normalize', video, { ...mtParams, output: 'mix' }))
+  check('normalize per-track mix job', m2.status === 'done', m2.errorTail ?? '')
   if (m2.outputs?.[0]) {
     const info = await probeFile(m2.outputs[0])
     check('mt mix single stereo track', info.audioStreams.length === 1 && info.audioStreams[0].channels === 2)

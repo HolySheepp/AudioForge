@@ -75,6 +75,8 @@ function SourceRow({
   const busy = item.status === 'waiting' || item.status === 'running'
   const isVideo = Boolean(item.info?.hasVideo)
   const isAudio = Boolean(item.info && !item.info.hasVideo)
+  // 多軌檔的逐軌參數只對應一個檔案 → 勾選時會排擠其他檔案(store 的 exclusive)
+  const multiTrack = (item.info?.audioStreams.length ?? 0) > 1
 
   // 各功能的選取規則
   // replace:影片用勾選框;音訊改用單選圓(勾了影片才解鎖)
@@ -106,6 +108,7 @@ function SourceRow({
           type="checkbox"
           checked={item.checked}
           disabled={disabledRow}
+          title={multiTrack ? t('source.multitrackExclusive') : undefined}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => setChecked(item.id, e.target.checked)}
         />
@@ -133,18 +136,18 @@ function SourceRow({
             <IconWarn /> {t('note.downgradedAac')}
           </span>
         )}
-        {item.analysis && (
-          <span className="row-analysis">
-            <b>{item.analysis.integrated.toFixed(1)}</b> LUFS
+        {item.analysis?.map((a) => (
+          <span key={a.track} className="row-analysis">
+            {item.analysis!.length > 1 && (
+              <em className="row-analysis-track">{t('param.track', { n: a.track + 1 })}</em>
+            )}
+            <b>{a.integrated.toFixed(1)}</b> LUFS
             {' · '}
-            {item.analysis.range.toFixed(1)} LU
+            {a.range.toFixed(1)} LU
             {' · '}
-            <b className={item.analysis.truePeak > -1 ? 'peak-warn' : ''}>
-              {fmtDb(item.analysis.truePeak)}
-            </b>{' '}
-            dBTP
+            <b className={a.truePeak > -1 ? 'peak-warn' : ''}>{fmtDb(a.truePeak)}</b> dBTP
           </span>
-        )}
+        ))}
         {busy && (
           <div className="row-progress">
             <div className="row-progress-fill" style={{ width: `${item.progress * 100}%` }} />

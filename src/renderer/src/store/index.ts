@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { translate } from '../i18n'
 import { toMediaUrl } from '../utils/media'
 import type {
-  AnalysisResult,
   HardwareInfo,
   JobSpec,
   JobStatus,
@@ -10,7 +9,8 @@ import type {
   MediaInfo,
   Settings,
   SoundInfo,
-  ToolId
+  ToolId,
+  TrackAnalysis
 } from '../../../shared/types'
 
 export interface SourceItem {
@@ -23,7 +23,7 @@ export interface SourceItem {
   progress: number
   errorTail: string | null
   note: string | null
-  analysis: AnalysisResult | null
+  analysis: TrackAnalysis[] | null
   jobId: string | null
 }
 
@@ -141,7 +141,11 @@ export const useApp = create<AppState>((set, get) => ({
         .probeFile(item.path)
         .then((info) =>
           set((s) => ({
-            source: s.source.map((it) => (it.id === item.id ? { ...it, info } : it))
+            // 軌數要 probe 完才知道,所以互斥規則得在這裡再收斂一次
+            source: exclusive(
+              s.source.map((it) => (it.id === item.id ? { ...it, info } : it)),
+              null
+            )
           }))
         )
         .catch(() =>
@@ -165,9 +169,17 @@ export const useApp = create<AppState>((set, get) => ({
     }),
 
   setChecked: (id, v) =>
-    set((s) => ({ source: s.source.map((it) => (it.id === id ? { ...it, checked: v } : it)) })),
+    set((s) => {
+      const next = s.source.map((it) => (it.id === id ? { ...it, checked: v } : it))
+      return { source: v ? exclusive(next, id) : next }
+    }),
 
-  checkAll: (v) => set((s) => ({ source: s.source.map((it) => ({ ...it, checked: v })) })),
+  checkAll: (v) =>
+    set((s) => {
+      const next = s.source.map((it) => ({ ...it, checked: v && !it.probeFailed }))
+      // 全選是批次意圖 → 多軌檔讓位
+      return { source: v ? exclusive(next, null) : next }
+    }),
 
   clearSource: () => set({ source: [], selectedPath: null, replaceAudio: null }),
 
@@ -234,6 +246,29 @@ export const useApp = create<AppState>((set, get) => ({
 
   cancelAll: () => void window.api.cancelAllJobs()
 }))
+
+/** 多軌檔(音軌數 > 1);逐軌介面的參數只能對應一個檔案,故與批次互斥 */
+export function isMultiTrack(it: SourceItem): boolean {
+  return (it.info?.audioStreams.length ?? 0) > 1
+}
+
+/**
+ * 多軌與批次互斥:勾選集合裡最多只能有一個多軌檔,且它一旦入選就得獨佔。
+ *
+ * priorityId = 使用者剛剛親手勾的項目,它的意圖優先。沒有(全選、拖入、probe 完成
+ * 這類非針對性的變動)時則讓批次贏——多軌檔被取消勾選,使用者再單獨點它即可獨佔。
+ */
+function exclusive(source: SourceItem[], priorityId: string | null): SourceItem[] {
+  const checked = source.filter((it) => it.checked)
+  if (checked.length <= 1) return source
+
+  const priority = priorityId ? checked.find((it) => it.id === priorityId) : undefined
+  if (priority && isMultiTrack(priority)) {
+    return source.map((it) => ({ ...it, checked: it.id === priority.id }))
+  }
+  if (!checked.some(isMultiTrack)) return source
+  return source.map((it) => (isMultiTrack(it) ? { ...it, checked: false } : it))
+}
 
 function hasActiveJobs(source: SourceItem[]): boolean {
   return source.some((it) => it.status === 'waiting' || it.status === 'running')

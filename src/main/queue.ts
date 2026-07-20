@@ -1,5 +1,5 @@
 import { rmSync } from 'fs'
-import type { AnalysisResult, JobSpec, JobUpdate, ToolId } from '../shared/types'
+import type { TrackAnalysis, JobSpec, JobUpdate, ToolId } from '../shared/types'
 import type { RunHandle } from './ffmpeg/run'
 
 export interface JobContext {
@@ -15,7 +15,7 @@ export interface JobContext {
 
 export interface ToolResult {
   outputs: string[]
-  analysis?: AnalysisResult
+  analysis?: TrackAnalysis[]
 }
 
 export type ToolRunner = (ctx: JobContext) => Promise<ToolResult>

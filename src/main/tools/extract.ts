@@ -3,14 +3,14 @@ import { resolveOutputPath } from '../output'
 import { getSettings } from '../settings'
 import { FFmpegError, type ToolRunner } from '../queue'
 import { losslessExt, runStage } from './common'
+import { resolveTracks } from './tracks'
 
 /** 抽取音軌:預設無損 stream copy 到對應容器;可選轉檔輸出 */
 export const extractRunner: ToolRunner = async (ctx) => {
   const mode = String(ctx.spec.params['mode'] ?? 'lossless')
-  const wanted = (ctx.spec.params['tracks'] as number[] | undefined) ?? [0]
   const info = await probeFile(ctx.spec.path)
 
-  const tracks = wanted.filter((i) => i < info.audioStreams.length)
+  const tracks = resolveTracks(ctx.spec.params['tracks'], info.audioStreams.length)
   if (tracks.length === 0) throw new FFmpegError('no matching audio track')
 
   const outputs: string[] = []

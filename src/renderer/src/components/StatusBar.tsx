@@ -1,6 +1,6 @@
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
-import { mergedParams, MULTITRACK_TRACK_DEFAULT, type MultitrackParams } from '../features/params'
+import { mergedParams } from '../features/params'
 import type { JobSpec } from '../../../shared/types'
 import { IconPlay } from './icons'
 
@@ -57,17 +57,6 @@ export function StatusBar(): React.JSX.Element {
         toast(t('param.replace.needAudio'))
         return
       }
-    }
-    if (tool === 'multitrack') {
-      candidates = checked.filter((it) => it.info!.hasVideo && it.info!.audioStreams.length > 0)
-      if (candidates.length === 0) {
-        toast(t('param.mt.needVideo'))
-        return
-      }
-      // 依第一個檔案的軌數補滿每軌設定
-      const mt = params as unknown as MultitrackParams
-      const n = candidates[0].info!.audioStreams.length
-      mt.tracks = Array.from({ length: n }, (_, i) => mt.tracks[i] ?? MULTITRACK_TRACK_DEFAULT)
     }
     if (tool === 'extract' || tool === 'analysis' || tool === 'normalize' || tool === 'convert') {
       candidates = checked.filter((it) => it.info!.audioStreams.length > 0)

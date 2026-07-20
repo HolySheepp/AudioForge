@@ -20,13 +20,12 @@ export const zh = {
   'tool.extract.desc': '預設無損取出音軌',
   'tool.convert': '音訊轉檔',
   'tool.convert.desc': 'WAV / MP3 / AAC / FLAC',
-  'tool.multitrack': '多軌工作流',
-  'tool.multitrack.desc': '各音軌分別標準化並混音寫回',
   'tool.mixdown': '混音合併',
   'tool.mixdown.desc': '把多個音訊混成單一音軌',
 
   // 來源欄
   'source.title': '來源檔案',
+  'source.multitrackExclusive': '多軌檔案需單獨處理,勾選它會取消其他檔案',
   'source.selectAll': '全選',
   'source.selectNone': '全不選',
   'source.clearAll': '清除全部',
@@ -69,6 +68,8 @@ export const zh = {
   'param.replace.length': '長度處理',
   'param.replace.keepVideo': '保留完整影片(音訊補靜音)',
   'param.replace.shortest': '以較短者為準',
+  'param.replace.target': '要替換的音軌',
+  'param.replace.targetAll': '全部替換',
   'param.replace.codec': '音訊編碼',
   'param.replace.needAudio': '勾選影片後,點選一個音訊作為新音軌',
 
@@ -82,8 +83,6 @@ export const zh = {
   // 參數:抽取
   'param.extract.mode': '輸出格式',
   'param.extract.lossless': '原格式無損(stream copy)',
-  'param.extract.tracks': '要抽取的音軌',
-  'param.extract.track': '音軌 {n}',
 
   // 參數:轉檔
   'param.convert.format': '輸出格式',
@@ -97,8 +96,9 @@ export const zh = {
   'param.convert.mono': '單聲道',
   'param.convert.mp3Mode': 'MP3 模式',
 
-  // 參數:多軌
-  'param.mt.track': '音軌 {n}',
+  // 參數:逐軌
+  'param.track': '音軌 {n}',
+  'param.tracks': '音軌',
   'param.mt.action': '處理方式',
   'param.mt.actionNormalize': '標準化',
   'param.mt.actionKeep': '保持原樣',
@@ -107,8 +107,6 @@ export const zh = {
   'param.mt.outputMix': '混音為單一立體聲軌',
   'param.mt.outputSeparate': '保留多軌',
   'param.mt.limiter': '混音後保險限制器',
-  'param.mt.needVideo': '此功能需要含音軌的影片檔',
-  'param.mt.trackCountNote': '以第一個勾選檔案的音軌配置為準,批次套用到相同軌序',
 
   // 分析結果
   'analysis.integrated': '整體響度',

@@ -14,8 +14,21 @@ const GRAB_PX = 24
 const FLICK_THRESHOLD = 700
 const PAN_FRICTION = 3
 const WINDOW_OPTIONS = [15, 30, 60, 120, 300]
+/**
+ * 左右內縮的可視範圍。播放頭線(含三角形手把)只在這個範圍內移動,
+ * 永遠離波形容器的圓角夠遠,線與手把因此不會被圓角裁到、也不會分離——
+ * 兩者用同一套座標換算,天生就是一體的。
+ */
+const PAD_X = 16
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v))
+/** 有效可視寬度(扣掉左右內縮) */
+const innerW = (w: number): number => Math.max(1, w - PAD_X * 2)
+/** 時間 → 螢幕 x(播放頭/手把用) */
+const timeToX = (t: number, vs: number, winLen: number, w: number): number =>
+  PAD_X + clamp((t - vs) / winLen, 0, 1) * innerW(w)
+/** 螢幕 x → 該點對應視窗內的時間比例(0~1),超出內縮範圍會夾到頭尾 */
+const xToFrac = (x: number, w: number): number => clamp((x - PAD_X) / innerW(w), 0, 1)
 
 function fmtClock(sec: number): string {
   if (!Number.isFinite(sec)) return '0:00'
@@ -144,14 +157,17 @@ export function PreviewPanel(): React.JSX.Element {
     const padY = 7
     const amp = mid - padY
 
+    const iw = innerW(w)
+
     if (peaks && dur > 0) {
       const n = peaks.length / 2
       g.strokeStyle = accent
       g.globalAlpha = 0.85
       g.lineWidth = 1
       g.beginPath()
-      for (let x = 0; x < w; x++) {
-        const tSec = vs + (x / w) * winLen
+      for (let i = 0; i <= iw; i++) {
+        const x = PAD_X + i
+        const tSec = vs + (i / iw) * winLen
         const bucket = Math.min(n - 1, Math.max(0, Math.floor((tSec / dur) * n)))
         g.moveTo(x + 0.5, mid - peaks[bucket * 2 + 1] * amp)
         g.lineTo(x + 0.5, mid - peaks[bucket * 2] * amp)
@@ -161,37 +177,31 @@ export function PreviewPanel(): React.JSX.Element {
     }
 
     if (dur > 0) {
-      const lineX = ((ct - vs) / winLen) * w
-      if (lineX >= -1 && lineX <= w + 1) {
-        // 線貫穿整個高度(超出波形帶)
-        g.strokeStyle = textCol
-        g.lineWidth = 2
-        g.beginPath()
-        g.moveTo(lineX, 0)
-        g.lineTo(lineX, h)
-        g.stroke()
+      // 線與兩端三角形手把用同一個 x(timeToX),天生黏在一起,且必落在 PAD_X 內縮
+      // 範圍內、離圓角夠遠,故永遠完整可見、不被裁切。畫在波形之後 = 永遠蓋在最上層。
+      const lineX = timeToX(ct, vs, winLen, w)
+      g.strokeStyle = textCol
+      g.lineWidth = 2
+      g.beginPath()
+      g.moveTo(lineX, 0)
+      g.lineTo(lineX, h)
+      g.stroke()
 
-        // 兩端的三角形手把:位置夾在畫布內,線在最左/最右時手把仍完整可見、可辨識可拖
-        const tri = 7
-        const handleX = clamp(lineX, tri + 1, w - tri - 1)
-        g.fillStyle = accent
-        g.strokeStyle = css.getPropertyValue('--bg').trim() || '#000'
-        g.lineWidth = 1
-        g.beginPath()
-        g.moveTo(handleX - tri, 0)
-        g.lineTo(handleX + tri, 0)
-        g.lineTo(handleX, tri + 3)
-        g.closePath()
-        g.fill()
-        g.stroke()
-        g.beginPath()
-        g.moveTo(handleX - tri, h)
-        g.lineTo(handleX + tri, h)
-        g.lineTo(handleX, h - tri - 3)
-        g.closePath()
-        g.fill()
-        g.stroke()
-      }
+      const tri = 7
+      g.fillStyle = textCol
+      g.beginPath()
+      g.moveTo(lineX - tri, 0)
+      g.lineTo(lineX + tri, 0)
+      g.lineTo(lineX, tri + 3)
+      g.closePath()
+      g.fill()
+      g.beginPath()
+      g.moveTo(lineX - tri, h)
+      g.lineTo(lineX + tri, h)
+      g.lineTo(lineX, h - tri - 3)
+      g.closePath()
+      g.fill()
+
       // 邊緣時間標記
       g.fillStyle = dimCol
       g.font = '10px system-ui, sans-serif'
@@ -243,7 +253,7 @@ export function PreviewPanel(): React.JSX.Element {
     const rect = e.currentTarget.getBoundingClientRect()
     const px = e.clientX - rect.left
     const ct = videoRef.current!.currentTime
-    const lineX = ((ct - viewStart.current) / gm.winLen) * gm.w
+    const lineX = timeToX(ct, viewStart.current, gm.winLen, gm.w)
 
     // 媒體短於視窗 → 無從平移,一律拖線;否則看游標離線遠近決定
     const mode: 'line' | 'pan' =
@@ -256,7 +266,7 @@ export function PreviewPanel(): React.JSX.Element {
       lineFrac: clamp((ct - viewStart.current) / gm.winLen, 0, 1),
       samples: [{ t: performance.now(), x: e.clientX }]
     }
-    if (mode === 'line') setTime(viewStart.current + (px / gm.w) * gm.winLen)
+    if (mode === 'line') setTime(viewStart.current + xToFrac(px, gm.w) * gm.winLen)
   }
 
   /**
@@ -284,12 +294,12 @@ export function PreviewPanel(): React.JSX.Element {
 
     if (d.mode === 'line') {
       const rect = e.currentTarget.getBoundingClientRect()
-      const px = clamp(e.clientX - rect.left, 0, gm.w)
-      setTime(viewStart.current + (px / gm.w) * gm.winLen)
+      const px = e.clientX - rect.left
+      setTime(viewStart.current + xToFrac(px, gm.w) * gm.winLen)
     } else {
       // 平移:內容隨手指移動(往右拖 = 回到更早的時間),播放頭維持在原螢幕位置
       const dx = e.clientX - d.startX
-      panTo(d.startView - (dx / gm.w) * gm.winLen, d.lineFrac, gm)
+      panTo(d.startView - (dx / innerW(gm.w)) * gm.winLen, d.lineFrac, gm)
     }
   }
 
@@ -308,7 +318,7 @@ export function PreviewPanel(): React.JSX.Element {
 
     const gm = geom()
     if (!gm) return
-    inertia.current.vel = -(vx / gm.w) * gm.winLen // 時間軸捲動速度(秒/秒)
+    inertia.current.vel = -(vx / innerW(gm.w)) * gm.winLen // 時間軸捲動速度(秒/秒)
     inertia.current.lineFrac = d.lineFrac
     inertia.current.last = performance.now()
     const tick = (nowT: number): void => {

@@ -55,11 +55,12 @@ export function PreviewPanel(): React.JSX.Element {
   const drag = useRef<{
     mode: 'line' | 'pan'
     startX: number
-    startView: number
+    startTime: number
     lineFrac: number
     samples: { t: number; x: number }[]
   } | null>(null)
   const inertia = useRef({ raf: 0, vel: 0, last: 0, lineFrac: 0 })
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const windowSecRef = useRef(windowSec)
   windowSecRef.current = windowSec
@@ -129,16 +130,20 @@ export function PreviewPanel(): React.JSX.Element {
     const maxView = Math.max(0, dur - winLen)
     const ct = media?.currentTime ?? 0
 
-    // 播放中且未拖曳:播放頭離開視窗就翻頁,讓線保持可見
-    if (!drag.current && !inertia.current.raf && dur > winLen) {
-      if (ct < viewStart.current || ct > viewStart.current + winLen) {
+    // 只在「播放中」才自動跟隨翻頁。暫停/拖曳時絕不自動捲動,
+    // 否則播放頭停在視窗邊緣時,currentTime 的取樣誤差會讓畫面反覆彈跳。
+    if (media && !media.paused && !drag.current && !inertia.current.raf && dur > winLen) {
+      if (ct < viewStart.current - 0.05 || ct > viewStart.current + winLen + 0.05) {
         viewStart.current = clamp(ct - winLen * 0.1, 0, maxView)
       }
     }
     viewStart.current = clamp(viewStart.current, 0, maxView)
     const vs = viewStart.current
 
-    // 波形(把整檔 2000 bucket 依可視窗切片、拉伸填滿寬度)
+    // 波形帶上下留白,讓播放頭線能超出波形範圍(更顯眼)
+    const padY = 7
+    const amp = mid - padY
+
     if (peaks && dur > 0) {
       const n = peaks.length / 2
       g.strokeStyle = accent
@@ -148,25 +153,38 @@ export function PreviewPanel(): React.JSX.Element {
       for (let x = 0; x < w; x++) {
         const tSec = vs + (x / w) * winLen
         const bucket = Math.min(n - 1, Math.max(0, Math.floor((tSec / dur) * n)))
-        const min = peaks[bucket * 2]
-        const max = peaks[bucket * 2 + 1]
-        g.moveTo(x + 0.5, mid - max * (mid - 2))
-        g.lineTo(x + 0.5, mid - min * (mid - 2))
+        g.moveTo(x + 0.5, mid - peaks[bucket * 2 + 1] * amp)
+        g.lineTo(x + 0.5, mid - peaks[bucket * 2] * amp)
       }
       g.stroke()
       g.globalAlpha = 1
     }
 
-    // 播放頭線
     if (dur > 0) {
       const lineX = ((ct - vs) / winLen) * w
-      if (lineX >= 0 && lineX <= w) {
+      if (lineX >= -1 && lineX <= w + 1) {
+        // 線貫穿整個高度(超出波形帶),兩端各一個朝內的三角形
         g.strokeStyle = textCol
-        g.lineWidth = 1.5
+        g.lineWidth = 2
         g.beginPath()
         g.moveTo(lineX, 0)
         g.lineTo(lineX, h)
         g.stroke()
+
+        const tri = 6
+        g.fillStyle = textCol
+        g.beginPath()
+        g.moveTo(lineX - tri, 0)
+        g.lineTo(lineX + tri, 0)
+        g.lineTo(lineX, tri + 2)
+        g.closePath()
+        g.fill()
+        g.beginPath()
+        g.moveTo(lineX - tri, h)
+        g.lineTo(lineX + tri, h)
+        g.lineTo(lineX, h - tri - 2)
+        g.closePath()
+        g.fill()
       }
       // 邊緣時間標記
       g.fillStyle = dimCol
@@ -228,11 +246,19 @@ export function PreviewPanel(): React.JSX.Element {
     drag.current = {
       mode,
       startX: e.clientX,
-      startView: viewStart.current,
-      lineFrac: (ct - viewStart.current) / gm.winLen,
+      startTime: ct,
+      lineFrac: clamp((ct - viewStart.current) / gm.winLen, 0, 1),
       samples: [{ t: performance.now(), x: e.clientX }]
     }
     if (mode === 'line') setTime(viewStart.current + (px / gm.w) * gm.winLen)
+  }
+
+  /** 平移:以時間為錨(而非視窗左緣),讓播放頭在視窗任一位置都能走到 0 與結尾 */
+  const panTo = (time: number, lineFrac: number, gm: NonNullable<ReturnType<typeof geom>>): boolean => {
+    const t2 = clamp(time, 0, gm.dur)
+    viewStart.current = clamp(t2 - lineFrac * gm.winLen, 0, gm.maxView)
+    setTime(t2)
+    return t2 <= 0 || t2 >= gm.dur
   }
 
   const onMove = (e: React.PointerEvent<HTMLCanvasElement>): void => {
@@ -248,10 +274,9 @@ export function PreviewPanel(): React.JSX.Element {
       const px = clamp(e.clientX - rect.left, 0, gm.w)
       setTime(viewStart.current + (px / gm.w) * gm.winLen)
     } else {
-      // 平移:視窗左緣隨拖曳反向移動;播放頭固定在原螢幕位置(故 currentTime 跟著粗調)
+      // 平移:內容隨手指移動(往右拖 = 回到更早的時間),播放頭維持在原螢幕位置
       const dx = e.clientX - d.startX
-      viewStart.current = clamp(d.startView - (dx / gm.w) * gm.winLen, 0, gm.maxView)
-      setTime(viewStart.current + d.lineFrac * gm.winLen)
+      panTo(d.startTime - (dx / gm.w) * gm.winLen, d.lineFrac, gm)
     }
   }
 
@@ -270,18 +295,20 @@ export function PreviewPanel(): React.JSX.Element {
 
     const gm = geom()
     if (!gm) return
-    inertia.current.vel = -(vx / gm.w) * gm.winLen // 視窗左緣的速度(秒/秒)
+    inertia.current.vel = -(vx / gm.w) * gm.winLen // 時間軸捲動速度(秒/秒)
     inertia.current.lineFrac = d.lineFrac
     inertia.current.last = performance.now()
     const tick = (nowT: number): void => {
       const g2 = geom()
-      if (!g2) return stopInertia()
+      const media = videoRef.current
+      if (!g2 || !media) return stopInertia()
       const dd = Math.min(0.05, (nowT - inertia.current.last) / 1000)
       inertia.current.last = nowT
-      const next = clamp(viewStart.current + inertia.current.vel * dd, 0, g2.maxView)
-      const hitEdge = next <= 0 || next >= g2.maxView
-      viewStart.current = next
-      setTime(next + inertia.current.lineFrac * g2.winLen)
+      const hitEdge = panTo(
+        media.currentTime + inertia.current.vel * dd,
+        inertia.current.lineFrac,
+        g2
+      )
       inertia.current.vel *= Math.exp(-PAN_FRICTION * dd)
       if (hitEdge || Math.abs(inertia.current.vel) < 0.5) return stopInertia()
       inertia.current.raf = requestAnimationFrame(tick)
@@ -316,10 +343,13 @@ export function PreviewPanel(): React.JSX.Element {
     }
   }
 
-  // 右鍵選單關閉
+  // 右鍵選單:點選單外才關閉(點在選單內會讓 click 來不及觸發)
   useEffect(() => {
     if (!menu) return
-    const close = (): void => setMenu(null)
+    const close = (e: MouseEvent): void => {
+      if (menuRef.current?.contains(e.target as Node)) return
+      setMenu(null)
+    }
     window.addEventListener('mousedown', close)
     return () => window.removeEventListener('mousedown', close)
   }, [menu])
@@ -384,7 +414,7 @@ export function PreviewPanel(): React.JSX.Element {
       )}
       {menu &&
         createPortal(
-          <div className="knob-menu" style={{ left: menu.x, top: menu.y }}>
+          <div className="knob-menu" ref={menuRef} style={{ left: menu.x, top: menu.y }}>
             <span>{t('preview.window')}</span>
             {WINDOW_OPTIONS.map((s) => (
               <button

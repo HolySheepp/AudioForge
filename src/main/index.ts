@@ -1,6 +1,8 @@
 import { app, BrowserWindow, protocol, shell, dialog, nativeTheme } from 'electron'
 import { join, extname } from 'path'
-import { open, stat } from 'fs/promises'
+import { createReadStream } from 'fs'
+import { stat } from 'fs/promises'
+import { Readable } from 'stream'
 import { registerIpc } from './ipc'
 import { initCache } from './cache'
 import { registerAllTools } from './tools'
@@ -9,10 +11,19 @@ import { getSettings } from './settings'
 
 // media:// 自訂協定:讓 renderer 的 <video>/<audio> 能安全地串流本地媒體檔
 // URL 形式:media:///C:/path/to/file.mp4(路徑經 encodeURIComponent 逐段編碼)
+// standard: true 是關鍵——非標準 scheme 在 Chromium 媒體管線中拿不到完整的
+// byte-range 支援,影片會出現 PIPELINE_ERROR_READ、時長誤判、seek 失效
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'media',
-    privileges: { standard: false, stream: true, bypassCSP: true, supportFetchAPI: true }
+    privileges: {
+      standard: true,
+      secure: true,
+      stream: true,
+      bypassCSP: true,
+      supportFetchAPI: true,
+      corsEnabled: true
+    }
   }
 ])
 
@@ -97,21 +108,21 @@ app.whenReady().then(() => {
     )
     return
   }
-  // 自行處理 Range 請求:<video>/<audio> 的進度條拖動(seek)必須靠 206 部分回應
+  /**
+   * 自行實作 Range:Electron 的 net.fetch 對 file:// 不回 206,seek 會失效。
+   * 開放式 bytes=N- 必須完整給到檔尾——截斷會讓 Chromium 誤判整檔已緩衝,
+   * 表現為播一下就卡、seek 重置。串流轉換交給 Readable.toWeb(背壓與取消由它處理)。
+   */
   const MEDIA_MIME: Record<string, string> = {
     mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', webm: 'video/webm',
-    m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac',
-    ogg: 'audio/ogg', opus: 'audio/ogg', aac: 'audio/aac'
+    mkv: 'video/webm', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav',
+    flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/ogg', aac: 'audio/aac'
   }
-  // 開放式 Range(bytes=N-)一律截成固定區塊,直接讀該區段進 Buffer 回傳。
-  // 不用串流:Chromium 播影片會頻繁 seek 並中止上一個請求,串流會因中途中止而拋錯
-  // (Chromium 端顯示為 PIPELINE_ERROR_READ),改為有界的 Buffer 回應即可完全避免。
-  const RANGE_CHUNK = 2 * 1024 * 1024
+  const MEDIA_DEBUG = process.env['AUDIOFORGE_MEDIADEBUG'] === '1'
+
   protocol.handle('media', async (request) => {
-    // media:///C%3A/Users/... → 還原為本地絕對路徑
-    const raw = decodeURIComponent(new URL(request.url).pathname)
-    const filePath = raw.startsWith('/') ? raw.slice(1) : raw
-    let fh: Awaited<ReturnType<typeof open>> | null = null
+    // media://file/<encodeURIComponent(絕對路徑)> → 還原為本地絕對路徑
+    const filePath = decodeURIComponent(new URL(request.url).pathname.replace(/^\//, ''))
     try {
       const st = await stat(filePath)
       const mime =
@@ -120,32 +131,29 @@ app.whenReady().then(() => {
       const m = range ? /bytes=(\d*)-(\d*)/.exec(range) : null
 
       const start = m?.[1] ? Number(m[1]) : 0
-      const explicitEnd = m?.[2] ? Number(m[2]) : null
-      const end =
-        explicitEnd != null
-          ? Math.min(explicitEnd, st.size - 1)
-          : Math.min(start + RANGE_CHUNK - 1, st.size - 1)
-      const length = Math.max(0, end - start + 1)
+      const end = m?.[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1
+      if (MEDIA_DEBUG) console.log(`MEDIA_REQ range=${range ?? 'none'} → ${start}-${end}/${st.size}`)
 
-      fh = await open(filePath, 'r')
-      const buf = Buffer.allocUnsafe(length)
-      if (length > 0) await fh.read(buf, 0, length, start)
-      await fh.close()
-      fh = null
+      if (start >= st.size || start > end) {
+        return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${st.size}` } })
+      }
 
-      // 有 Range 或被截斷 → 206;整檔一次要完 → 200
-      const partial = range != null || length < st.size
-      return new Response(buf, {
-        status: partial ? 206 : 200,
-        headers: {
-          'Content-Type': mime,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': String(length),
-          ...(partial ? { 'Content-Range': `bytes ${start}-${end}/${st.size}` } : {})
-        }
+      const rs = createReadStream(filePath, { start, end })
+      // seek 造成的中止會讓 fs 串流拋錯,吸收掉避免變成未處理例外
+      rs.on('error', () => undefined)
+
+      const headers: Record<string, string> = {
+        'Content-Type': mime,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': String(end - start + 1)
+      }
+      if (m) headers['Content-Range'] = `bytes ${start}-${end}/${st.size}`
+
+      return new Response(Readable.toWeb(rs) as ReadableStream, {
+        status: m ? 206 : 200,
+        headers
       })
     } catch {
-      await fh?.close().catch(() => undefined)
       return new Response(null, { status: 404 })
     }
   })

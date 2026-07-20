@@ -12,9 +12,9 @@ export interface PreviewResult {
   isProxy: boolean
 }
 
-/** 本地路徑 → media:// URL */
+/** 本地路徑 → media:// URL(格式須與 renderer/utils/media.ts 一致) */
 export function toMediaUrl(path: string): string {
-  return 'media:///' + path.split(/[\\/]/).map(encodeURIComponent).join('/')
+  return 'media://file/' + encodeURIComponent(path)
 }
 
 // Chromium 可直接解碼的組合

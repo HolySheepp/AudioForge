@@ -71,6 +71,22 @@ Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '*AudioFo
 多軌時 `-filter:a:N` / `-c:a:N` 的 N 是**輸出**音訊流序號,因為映射保持原軌序,
 所以 N 等於軌序。
 
+## 混音真峰值限制器(踩過的坑)
+
+混音後的保險限制器**必須用真峰值(true peak),不能只用 `alimiter`**。
+`alimiter` 只限制取樣點峰值(sample peak),但各軌相加後的 inter-sample peak
+對真實寬頻內容可高出數 dB——實測混音後 true peak 會衝到 +1 ~ +3,即使 alimiter
+設在 -1。BS.1770 的 true peak 就是 4× 超取樣後的峰值。
+
+作法(`common.ts` 的 `truePeakLimiter`):升到 4×(48k→192k)→ `alimiter`
+→ 降回原取樣率。降採樣會回吐約 0.2–0.5dB,故內部門檻再壓低 0.5dB 當餘裕,
+輸出穩定落在天花板下方約 0.3dB。
+
+**測試陷阱**:驗證這條限制器**不能用正弦波**——正弦頻帶受限、幾乎沒有
+inter-sample peak,拿掉超取樣它照樣過。冒煙測試的影片音軌因此改用寬頻內容
+(粉紅噪 + 鋸齒),且混音測試把兩軌都推到 -9 LUFS 逼混音過載,未修版本會在此
+FAIL(true peak -0.4)、修好後 -1.3。
+
 ## 技術決策備忘(偏離最初 PROMPT.md 的地方)
 
 - React 19(非 PROMPT 寫的 18)

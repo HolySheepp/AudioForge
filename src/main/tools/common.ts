@@ -87,6 +87,24 @@ export async function runStage(
   return stderr
 }
 
+/**
+ * 真峰值(true peak)限制器濾鏡片段。
+ *
+ * alimiter 只限制取樣點峰值(sample peak),對真實寬頻內容,取樣點之間的
+ * 重建峰值(inter-sample peak)可高出數 dB——實測混音後 true peak 會衝到 +3
+ * 以上,即使 alimiter 設在 -1。BS.1770 的 true peak 定義就是 4 倍超取樣後的峰值。
+ *
+ * 因此在限制器前後做超取樣:升到 4×(48k→192k)讓 alimiter 逮到 inter-sample
+ * 峰值,再降回原取樣率。降採樣會回吐約 0.2–0.5dB,故內部門檻再壓低 0.5dB 當餘裕。
+ * 實測多種極端素材(原始 tp +0.3 ~ +7.4)都穩定落在天花板下方約 0.3dB。
+ */
+export function truePeakLimiter(ceilingDb: number, sr: number): string {
+  const osRate = Math.max(192000, sr * 2) // 48k→192k(4×);較高取樣率至少 2×
+  const MARGIN_DB = 0.5
+  const linear = Math.pow(10, (ceilingDb - MARGIN_DB) / 20).toFixed(6)
+  return `,aresample=${osRate},alimiter=limit=${linear}:level=false,aresample=${sr}`
+}
+
 /** 抽取:來源音訊 codec → 無損容器副檔名 */
 export function losslessExt(codec: string): string {
   if (codec === 'aac') return 'm4a'

@@ -8,6 +8,7 @@ import {
   parseLoudnormBlocks,
   runStage,
   sameFormatAudioArgs,
+  truePeakLimiter,
   type LoudnormMeasured
 } from './common'
 import { resolveTrackCfgs } from './tracks'
@@ -143,10 +144,10 @@ async function perTrack(ctx: JobContext, info: MediaInfo): Promise<ToolResult> {
         : `${inputLabels}anull`
     chain += `,aformat=sample_rates=${sr}:channel_layouts=stereo`
     if (limiter) {
-      // 保險限制器:上限 = 全域 TP 目標(UI 旋鈕);僅在混音峰值超標時介入
+      // 保險限制器:上限 = 全域 TP 目標(UI 旋鈕)。走真峰值限制(超取樣),
+      // 否則各軌相加後的 inter-sample 峰值會遠超天花板
       const tpCeil = Number(ctx.spec.params['limiterTp'] ?? -1)
-      const linear = Math.pow(10, tpCeil / 20).toFixed(6)
-      chain += `,alimiter=limit=${linear}:level=false`
+      chain += truePeakLimiter(tpCeil, sr)
     }
     parts.push(`${chain}[mix]`)
 

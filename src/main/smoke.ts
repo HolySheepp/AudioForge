@@ -74,10 +74,12 @@ export async function runSmoke(): Promise<void> {
   const video = join(dir, 'video.mp4') // testsrc2 + 兩條 AAC 音軌(遊戲軌/麥克風軌模擬)
   await ff(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=8', '-af', 'volume=0.3', '-ar', '48000', wavA])
   await ff(['-f', 'lavfi', '-i', 'sine=frequency=880:duration=8', '-af', 'volume=0.08', '-ar', '48000', wavB])
+  // 兩條音軌用寬頻內容(粉紅噪 / 鋸齒),而非正弦——正弦頻帶受限、幾乎沒有
+  // inter-sample peak,無法驗證混音真峰值限制器。音量刻意差一截(供逐軌測量比對)
   await ff([
     '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30:duration=8',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=8',
-    '-f', 'lavfi', '-i', 'sine=frequency=880:duration=8',
+    '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=8:sample_rate=48000:amplitude=0.5',
+    '-f', 'lavfi', '-i', 'aevalsrc=0.5*mod(t*300\\,1):duration=8:sample_rate=48000',
     '-filter_complex', '[1:a]volume=0.30[a1];[2:a]volume=0.06[a2]',
     '-map', '0:v', '-map', '[a1]', '-map', '[a2]',
     '-c:v', 'libx264', '-preset', 'ultrafast',
@@ -231,12 +233,31 @@ export async function runSmoke(): Promise<void> {
     check('mt track1 → -20 ±0.5', Math.abs(t0 - -20) <= 0.5, `measured ${t0}`)
   }
 
-  const m2 = await runJob(spec('normalize', video, { ...mtParams, output: 'mix' }))
+  // 混音真峰值:兩軌都推到 -9 LUFS 逼混音過載(未修版本會超過 -1),
+  // 驗證超取樣真峰值限制器真的守住天花板。用正弦素材無法驗——故前面改成寬頻音軌
+  const loudMix = {
+    tracks: [
+      { action: 'normalize', lufs: -9, tp: -1 },
+      { action: 'normalize', lufs: -9, tp: -1 }
+    ],
+    output: 'mix',
+    limiter: true,
+    limiterTp: -1
+  }
+  const m2 = await runJob(spec('normalize', video, loudMix))
   check('normalize per-track mix job', m2.status === 'done', m2.errorTail ?? '')
   if (m2.outputs?.[0]) {
     const info = await probeFile(m2.outputs[0])
     check('mt mix single stereo track', info.audioStreams.length === 1 && info.audioStreams[0].channels === 2)
     check('mt mix video copy', info.videoCodec === srcInfo.videoCodec)
+    // 混音後真峰值必須守住天花板(alimiter 是 sample-peak,得靠超取樣壓 true peak)
+    const { stderr } = await execFileAsync(
+      ffmpegPath,
+      ['-hide_banner', '-i', m2.outputs[0], '-map', '0:a:0', '-af', 'ebur128=peak=true', '-f', 'null', 'NUL'],
+      { windowsHide: true, timeout: 120000, maxBuffer: 32 * 1024 * 1024 }
+    ).catch((e: { stderr?: string }) => ({ stderr: e.stderr ?? '' }))
+    const tp = parseEbur128Summaries(stderr)[0]?.truePeak ?? NaN
+    check('mt mix true peak ≤ -1 dBTP', tp <= -1, `measured ${tp}`)
   }
 
   // 資訊性檢查(不列入失敗):HapticWeb 服務是否可達、發送鏈是否正常

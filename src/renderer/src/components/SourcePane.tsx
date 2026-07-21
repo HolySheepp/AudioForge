@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useApp, type SourceItem } from '../store'
 import { useT } from '../hooks/useT'
-import { fmtDuration, fmtDb } from '../utils/format'
+import { fmtDuration } from '../utils/format'
+import { ANALYSIS_METRICS, metricValue } from '../../../shared/types'
 import { IconDrop, IconStop, IconWarn } from './icons'
 
 export function SourcePane(): React.JSX.Element {
@@ -71,6 +72,7 @@ function SourceRow({
   const anyVideoChecked = useApp((s) =>
     s.source.some((it) => it.checked && it.info?.hasVideo)
   )
+  const pinnedMetrics = useApp((s) => s.settings?.pinnedMetrics ?? [])
 
   const busy = item.status === 'waiting' || item.status === 'running'
   const isVideo = Boolean(item.info?.hasVideo)
@@ -141,11 +143,18 @@ function SourceRow({
             {item.analysis!.length > 1 && (
               <em className="row-analysis-track">{t('param.track', { n: a.track + 1 })}</em>
             )}
-            <b>{a.integrated.toFixed(1)}</b> LUFS
-            {' · '}
-            {a.range.toFixed(1)} LU
-            {' · '}
-            <b className={a.truePeak > -1 ? 'peak-warn' : ''}>{fmtDb(a.truePeak)}</b> dBTP
+            {pinnedMetrics
+              .map((id) => ({ id, def: ANALYSIS_METRICS.find((m) => m.id === id), v: metricValue(a, id) }))
+              .filter((x) => x.def && x.v != null)
+              .map((x, k) => (
+                <span key={x.id}>
+                  {k > 0 ? ' · ' : ''}
+                  <b className={x.id === 'truePeak' && x.v! > -1 ? 'peak-warn' : ''}>
+                    {x.v!.toFixed(1)}
+                  </b>{' '}
+                  {x.def!.unit}
+                </span>
+              ))}
           </span>
         ))}
         {busy && (

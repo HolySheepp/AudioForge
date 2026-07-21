@@ -61,6 +61,32 @@ export function StatusBar(): React.JSX.Element {
     if (tool === 'extract' || tool === 'analysis' || tool === 'normalize' || tool === 'convert') {
       candidates = checked.filter((it) => it.info!.audioStreams.length > 0)
     }
+
+    // 分析:逐檔的軌選擇來自卡片(analysisTracks);未選任何軌的檔案跳過
+    if (tool === 'analysis') {
+      const analysisTracks = useApp.getState().analysisTracks
+      const specs: JobSpec[] = []
+      for (const it of candidates) {
+        const all = it.info!.audioStreams.map((_, i) => i)
+        const tracks = analysisTracks[it.path] ?? all
+        if (tracks.length === 0) continue
+        specs.push({
+          jobId: `j${Date.now()}-${jobSeq++}`,
+          itemId: it.id,
+          tool,
+          path: it.path,
+          params: { ...params, tracks }
+        })
+      }
+      if (specs.length === 0) {
+        toast(t('toast.noChecked'))
+        return
+      }
+      void startJobs(specs)
+      toast(t('toast.jobsStarted', { n: specs.length }))
+      return
+    }
+
     if (candidates.length === 0) {
       toast(t('toast.noChecked'))
       return

@@ -530,6 +530,131 @@
   min-width: 220px;
 }
 
+/* ===== 響度分析面板 ===== */
+.analysis-panel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.analysis-pinbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.analysis-pinchips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pin-chip {
+  padding: 3px 9px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.pin-chip.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.analysis-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.analysis-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  min-width: 210px;
+  cursor: pointer;
+  transition: border-color 120ms;
+}
+.analysis-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.ac-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ac-head input {
+  accent-color: var(--accent);
+  pointer-events: none;
+}
+.ac-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ac-title b {
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.ac-title small {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.ac-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+}
+.ac-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ac-metric-val {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.ac-metric-val em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-dim);
+  margin-left: 3px;
+}
+.ac-metric-label {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+/* 設定:響度分析頁 */
+.field-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.metric-unit {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+.metric-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
 /* ===== 旋鈕 ===== */
 .knob {
   display: flex;
@@ -776,29 +901,148 @@
   border-color: var(--text);
   box-shadow: 0 0 0 2px var(--surface) inset;
 }
-/* 自訂顏色的「+」色票:點擊開原生調色盤 */
+/* 自訂顏色以框區分:深色模式淺框、淺色模式深框(比對比對比更清楚) */
+.accent-custom {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px rgba(255, 255, 255, 0.55);
+}
+:root[data-theme='light'] .accent-custom {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px rgba(0, 0, 0, 0.4);
+}
+.accent-custom.active {
+  box-shadow: 0 0 0 2px var(--surface) inset;
+}
+/* 自訂顏色的「+」色票:點擊開 app 內調色盤。加號用兩條偽元素精準置中 */
 .accent-add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
   background: var(--surface-2);
   border: 1.5px dashed var(--text-dim);
-  color: var(--text-dim);
-  font-size: 15px;
   cursor: pointer;
-  overflow: hidden;
 }
 .accent-add:hover {
   border-color: var(--accent);
-  color: var(--accent);
 }
-.accent-add input[type='color'] {
+.accent-add-plus {
   position: absolute;
-  width: 0;
-  height: 0;
-  opacity: 0;
-  border: none;
-  padding: 0;
+  inset: 0;
+}
+.accent-add-plus::before,
+.accent-add-plus::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--text-dim);
+}
+.accent-add-plus::before {
+  width: 11px;
+  height: 1.6px;
+}
+.accent-add-plus::after {
+  width: 1.6px;
+  height: 11px;
+}
+.accent-add:hover .accent-add-plus::before,
+.accent-add:hover .accent-add-plus::after {
+  background: var(--accent);
+}
+
+/* ===== app 內調色盤(可拖曳浮動面板) ===== */
+.colorpicker {
+  position: fixed;
+  z-index: 60;
+  width: 252px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 14px 40px var(--shadow);
+  user-select: none;
+}
+.cp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  cursor: grab;
+  touch-action: none;
+}
+.cp-header:active {
+  cursor: grabbing;
+}
+.cp-preview {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+}
+.cp-sv {
+  position: relative;
+  border-radius: 8px;
+  cursor: crosshair;
+  touch-action: none;
+  overflow: hidden;
+}
+.cp-sv-white,
+.cp-sv-black {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+}
+.cp-sv-white {
+  background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0));
+}
+.cp-sv-black {
+  background: linear-gradient(to top, #000, rgba(0, 0, 0, 0));
+}
+.cp-sv-dot,
+.cp-hue-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cp-hue {
+  position: relative;
+  border-radius: 7px;
+  cursor: ew-resize;
+  touch-action: none;
+  background: linear-gradient(
+    to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%
+  );
+}
+.cp-hue-dot {
+  top: 50%;
+  background: transparent;
+}
+.cp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cp-hex {
+  width: 84px;
+  padding: 4px 6px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.cp-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 /* 色票顯示各副色在當前主題下的實際顏色 */
 .accent-swatch[data-accent-preview='blue'] {

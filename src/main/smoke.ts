@@ -12,6 +12,7 @@ import { probeFile } from './ffmpeg/probe'
 import { queue } from './queue'
 import { registerAllTools } from './tools'
 import { parseEbur128Summaries } from './tools/common'
+import { updateSettings } from './settings'
 import { hapticTest } from './haptics'
 import type { JobSpec, JobUpdate } from '../shared/types'
 
@@ -111,6 +112,18 @@ export async function runSmoke(): Promise<void> {
       `${a2.analysis[0].integrated} vs ${a2.analysis[1].integrated}`
     )
   }
+
+  // crest(astats)逐軌解析:啟用後兩軌各有有限 crest,且順序正確對應
+  updateSettings({ analysisMetrics: ['lufs', 'lra', 'truePeak', 'plr', 'crest'] })
+  const ac = await runJob(spec('analysis', video, { tracks: [0, 1] }))
+  check(
+    'analysis crest per-track',
+    ac.analysis?.length === 2 &&
+      Number.isFinite(ac.analysis[0].crest ?? NaN) &&
+      Number.isFinite(ac.analysis[1].crest ?? NaN),
+    ac.analysis?.map((x) => `t${x.track}:crest ${x.crest?.toFixed(1)}`).join(' ') ?? (ac.errorTail ?? '')
+  )
+  updateSettings({ analysisMetrics: ['lufs', 'lra', 'truePeak', 'plr'] })
 
   // ---- 2. normalize(wav → -14 LUFS ±0.5)----
   const n1 = await runJob(spec('normalize', wavA, { lufs: -14, tp: -1 }))

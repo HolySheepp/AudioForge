@@ -54,6 +54,8 @@ interface AppState {
   toasts: Toast[]
   /** replace 功能:選作新音軌的音訊檔路徑(單選) */
   replaceAudio: string | null
+  /** 響度分析:各來源檔要分析的軌序(path → 軌序陣列);無此鍵 = 全部軌 */
+  analysisTracks: Record<string, number[]>
 
   init: () => Promise<void>
   playSound: (soundId?: string) => void
@@ -69,6 +71,8 @@ interface AppState {
   select: (path: string | null) => void
   toast: (text: string) => void
   setReplaceAudio: (path: string | null) => void
+  /** 切換某檔某軌是否納入分析(allTracks = 該檔全部軌序,供預設值) */
+  toggleAnalysisTrack: (path: string, track: number, allTracks: number[]) => void
   saveSettings: (patch: Partial<Settings>) => Promise<void>
   saveToolParams: (tool: ToolId, params: Record<string, unknown>) => void
   /** groupItemIds:單一 job 涵蓋多個來源項(mixdown)時,全部標上同一 jobId */
@@ -87,6 +91,7 @@ export const useApp = create<AppState>((set, get) => ({
   selectedPath: null,
   toasts: [],
   replaceAudio: null,
+  analysisTracks: {},
 
   init: async () => {
     const settings = await window.api.getSettings()
@@ -211,6 +216,15 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   setReplaceAudio: (path) => set({ replaceAudio: path }),
+
+  toggleAnalysisTrack: (path, track, allTracks) =>
+    set((s) => {
+      const cur = s.analysisTracks[path] ?? allTracks
+      const next = cur.includes(track)
+        ? cur.filter((n) => n !== track)
+        : [...cur, track].sort((a, b) => a - b)
+      return { analysisTracks: { ...s.analysisTracks, [path]: next } }
+    }),
 
   saveSettings: async (patch) => {
     const settings = await window.api.updateSettings(patch)

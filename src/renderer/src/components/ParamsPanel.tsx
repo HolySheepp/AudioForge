@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useApp, type SourceItem } from '../store'
 import { useT } from '../hooks/useT'
+import type { I18nKey } from '../i18n'
 import { Knob } from './Knob'
 import {
   clampTrackSelection,
   mergedParams,
   NORMALIZE_TRACK_DEFAULT,
   padTracks,
-  type AnalysisParams,
   type ConvertParams,
   type ExtractParams,
   type MixdownParams,
@@ -15,7 +15,12 @@ import {
   type NormalizeTrackCfg,
   type ReplaceParams
 } from '../features/params'
-import type { AudioStreamInfo, ToolId } from '../../../shared/types'
+import {
+  ANALYSIS_METRICS,
+  metricValue,
+  type AudioStreamInfo,
+  type ToolId
+} from '../../../shared/types'
 
 /** 各功能參數面板;key=tool 讓切換功能時重新初始化 */
 export function ParamsPanel(): React.JSX.Element {
@@ -134,29 +139,108 @@ function TrackChecks({
 function AnalysisPanel(): React.JSX.Element {
   const t = useT()
   const source = useApp((s) => s.source)
+  const settings = useApp((s) => s.settings)!
   const toast = useApp((s) => s.toast)
-  const [p, update] = useToolParams<AnalysisParams>('analysis')
-  const { streams, perTrack } = useTrackCtx()
-  const results = source.filter((it) => it.analysis?.length)
+  const saveSettings = useApp((s) => s.saveSettings)
+  const analysisTracks = useApp((s) => s.analysisTracks)
+  const toggleAnalysisTrack = useApp((s) => s.toggleAnalysisTrack)
+
+  // 啟用的指標(依 settings 順序沿用 ANALYSIS_METRICS 的排序)
+  const metrics = ANALYSIS_METRICS.filter((m) => settings.analysisMetrics.includes(m.id))
+  const files = source.filter((it) => it.checked && it.info && it.info.audioStreams.length > 0)
+  const multiFile = files.length > 1
+
+  const togglePin = (id: string): void => {
+    const next = settings.pinnedMetrics.includes(id)
+      ? settings.pinnedMetrics.filter((p) => p !== id)
+      : [...settings.pinnedMetrics, id]
+    void saveSettings({ pinnedMetrics: next })
+  }
 
   const copyTable = (): void => {
-    const lines = results.flatMap((it) =>
-      it.analysis!.map(
-        (a) =>
-          `${it.info?.name ?? it.path}\t${a.track + 1}\t${a.integrated.toFixed(1)}\t${a.range.toFixed(1)}\t${a.truePeak.toFixed(1)}`
-      )
-    )
-    void navigator.clipboard.writeText(`File\tTrack\tLUFS\tLU\tdBTP\n${lines.join('\n')}`)
+    const header = ['File', 'Track', ...metrics.map((m) => m.id)].join('\t')
+    const lines: string[] = []
+    for (const it of source) {
+      for (const a of it.analysis ?? []) {
+        const cols = metrics.map((m) => metricValue(a, m.id)?.toFixed(1) ?? '')
+        lines.push([it.info?.name ?? it.path, a.track + 1, ...cols].join('\t'))
+      }
+    }
+    void navigator.clipboard.writeText(`${header}\n${lines.join('\n')}`)
     toast(t('analysis.copied'))
   }
 
+  if (files.length === 0) {
+    return (
+      <div className="panel-inner">
+        <p className="panel-hint">{t('analysis.empty')}</p>
+      </div>
+    )
+  }
+
+  const hasResults = files.some((it) => it.analysis?.length)
+
   return (
-    <div className="panel-inner">
-      <p className="panel-hint">{t('tool.analysis.desc')}</p>
-      {perTrack && (
-        <TrackChecks streams={streams} selected={p.tracks} onChange={(tracks) => update({ tracks })} />
-      )}
-      {results.length > 0 && (
+    <div className="panel-inner analysis-panel">
+      <div className="analysis-pinbar">
+        <span>{t('analysis.pinLabel')}</span>
+        <div className="analysis-pinchips">
+          {metrics.map((m) => (
+            <button
+              key={m.id}
+              className={`pin-chip${settings.pinnedMetrics.includes(m.id) ? ' on' : ''}`}
+              onClick={() => togglePin(m.id)}
+            >
+              {t(`metric.${m.id}` as I18nKey)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="analysis-cards">
+        {files.flatMap((it) => {
+          const all = it.info!.audioStreams.map((_, i) => i)
+          const sel = analysisTracks[it.path] ?? all
+          return it.info!.audioStreams.map((st, i) => {
+            const on = sel.includes(i)
+            const a = it.analysis?.find((x) => x.track === i)
+            return (
+              <div
+                key={`${it.path}#${i}`}
+                className={`analysis-card${on ? ' on' : ''}`}
+                onClick={() => toggleAnalysisTrack(it.path, i, all)}
+              >
+                <div className="ac-head">
+                  <input type="checkbox" checked={on} readOnly tabIndex={-1} />
+                  <div className="ac-title">
+                    {multiFile && <b title={it.path}>{it.info!.name}</b>}
+                    <small>
+                      {t('param.track', { n: i + 1 })} · {st.codec} · {st.channels}ch
+                      {st.language ? ` · ${st.language}` : ''}
+                    </small>
+                  </div>
+                </div>
+                <div className="ac-metrics">
+                  {metrics.map((m) => {
+                    const v = a ? metricValue(a, m.id) : undefined
+                    return (
+                      <div key={m.id} className="ac-metric">
+                        <span className="ac-metric-val">
+                          {v == null ? '—' : v.toFixed(1)}
+                          <em>{m.unit}</em>
+                        </span>
+                        <span className="ac-metric-label">{t(`metric.${m.id}` as I18nKey)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })
+        })}
+      </div>
+
+      {hasResults && (
         <button className="mini-btn accent" onClick={copyTable}>
           {t('analysis.copyTable')}
         </button>

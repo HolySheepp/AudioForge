@@ -45,6 +45,48 @@ export interface AnalysisResult {
 export interface TrackAnalysis extends AnalysisResult {
   /** 第幾條音軌(0-based,以音軌計) */
   track: number
+  /** Crest factor(Peak − RMS, dB);僅在設定啟用時測量 */
+  crest?: number
+}
+
+/**
+ * 響度分析指標定義。id 為穩定鍵(存於 settings、job params);
+ * derived = 由既有 ebur128 數值算出(免費);needsAstats = 需額外 astats 測量。
+ */
+export interface MetricDef {
+  id: string
+  unit: string
+  derived: boolean
+  needsAstats: boolean
+}
+export const ANALYSIS_METRICS: MetricDef[] = [
+  { id: 'lufs', unit: 'LUFS', derived: false, needsAstats: false },
+  { id: 'lra', unit: 'LU', derived: false, needsAstats: false },
+  { id: 'truePeak', unit: 'dBTP', derived: false, needsAstats: false },
+  { id: 'plr', unit: 'LU', derived: true, needsAstats: false },
+  { id: 'crest', unit: 'dB', derived: false, needsAstats: true }
+]
+/** 預設分析的指標(crest 需另跑 astats,預設關) */
+export const DEFAULT_ANALYSIS_METRICS = ['lufs', 'lra', 'truePeak', 'plr']
+/** 預設釘到來源列的指標 */
+export const DEFAULT_PINNED_METRICS = ['lufs', 'lra', 'truePeak']
+
+/** 從分析結果取某指標值(plr 為衍生) */
+export function metricValue(a: TrackAnalysis, id: string): number | undefined {
+  switch (id) {
+    case 'lufs':
+      return a.integrated
+    case 'lra':
+      return a.range
+    case 'truePeak':
+      return a.truePeak
+    case 'plr':
+      return a.truePeak - a.integrated
+    case 'crest':
+      return a.crest
+    default:
+      return undefined
+  }
 }
 
 export interface JobUpdate {
@@ -119,6 +161,10 @@ export interface Settings {
   toolParams: Record<string, Record<string, unknown>>
   /** 各旋鈕的棘輪步進選擇(key = 旋鈕 id) */
   knobSteps: Record<string, number>
+  /** 響度分析要計算的指標 id(見 ANALYSIS_METRICS) */
+  analysisMetrics: string[]
+  /** 分析後釘到來源列的指標 id */
+  pinnedMetrics: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -136,7 +182,9 @@ export const DEFAULT_SETTINGS: Settings = {
   soundTiming: 'perFile',
   previewWindowSec: 60,
   toolParams: {},
-  knobSteps: {}
+  knobSteps: {},
+  analysisMetrics: DEFAULT_ANALYSIS_METRICS,
+  pinnedMetrics: DEFAULT_PINNED_METRICS
 }
 
 /** 支援的副檔名(小寫、不含點) */

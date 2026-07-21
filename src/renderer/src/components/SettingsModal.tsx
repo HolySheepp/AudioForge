@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
-import { ACCENTS } from '../../../shared/types'
+import type { I18nKey } from '../i18n'
+import { ACCENTS, ANALYSIS_METRICS } from '../../../shared/types'
 import { FreeKnob } from './FreeKnob'
+import { ColorPicker } from './ColorPicker'
 
-const TABS = ['general', 'appearance', 'haptics', 'hardware'] as const
+const TABS = ['general', 'appearance', 'analysis', 'haptics', 'hardware'] as const
 type Tab = (typeof TABS)[number]
 
 export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.Element | null {
@@ -16,9 +18,36 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
   const sounds = useApp((s) => s.sounds)
   const playSound = useApp((s) => s.playSound)
   const [tab, setTab] = useState<Tab>('general')
+  // 開調色盤時記住原本的副色,Cancel 時還原;picking 期間隱藏設定與遮罩
+  const [picking, setPicking] = useState<string | null>(null)
   if (!settings) return null
 
   const effectiveSoundId = settings.soundId || sounds[0]?.id || 'none'
+
+  // 調色盤開啟:只渲染調色盤,設定面板與變暗遮罩都收起,讓使用者以原亮度預覽主界面
+  if (picking !== null) {
+    return (
+      <ColorPicker
+        initial={settings.accent.startsWith('#') ? settings.accent : '#4f8cff'}
+        onPreview={(hex) => void saveSettings({ accent: hex })}
+        onCancel={() => {
+          void saveSettings({ accent: picking })
+          setPicking(null)
+        }}
+        onSave={(hex) => {
+          if (settings.customAccents.includes(hex)) {
+            void saveSettings({ accent: hex })
+          } else if (settings.customAccents.length >= 5) {
+            void saveSettings({ accent: hex })
+            toast(t('toast.customFull'))
+          } else {
+            void saveSettings({ accent: hex, customAccents: [...settings.customAccents, hex] })
+          }
+          setPicking(null)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -127,9 +156,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
                   {settings.customAccents.map((hex) => (
                     <button
                       key={hex}
-                      className={`accent-swatch${settings.accent === hex ? ' active' : ''}`}
+                      className={`accent-swatch accent-custom${settings.accent === hex ? ' active' : ''}`}
                       style={{ background: hex }}
-                      title={`${hex}(${t('settings.accent.deleteHint')})`}
+                      title={t('settings.accent.customHint')}
                       onClick={() => void saveSettings({ accent: hex })}
                       onContextMenu={(e) => {
                         e.preventDefault()
@@ -140,31 +169,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
                       }}
                     />
                   ))}
-                  <label className="accent-swatch accent-add" title={t('settings.accent.custom')}>
-                    +
-                    <input
-                      type="color"
-                      value={settings.accent.startsWith('#') ? settings.accent : '#4f8cff'}
-                      onChange={(e) => void saveSettings({ accent: e.target.value })}
-                    />
-                  </label>
-                  {settings.accent.startsWith('#') &&
-                    !settings.customAccents.includes(settings.accent) && (
-                      <button
-                        className="mini-btn accent"
-                        onClick={() => {
-                          if (settings.customAccents.length >= 5) {
-                            toast(t('toast.customFull'))
-                            return
-                          }
-                          void saveSettings({
-                            customAccents: [...settings.customAccents, settings.accent]
-                          })
-                        }}
-                      >
-                        {t('settings.accent.save')}
-                      </button>
-                    )}
+                  <button
+                    className="accent-swatch accent-add"
+                    title={t('settings.accent.custom')}
+                    onClick={() => setPicking(settings.accent)}
+                  >
+                    <span className="accent-add-plus" />
+                  </button>
                 </div>
               </div>
 
@@ -211,6 +222,33 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
                   <p className="panel-hint sound-credit">{t('settings.sound.credit')}</p>
                 </>
               )}
+            </>
+          )}
+
+          {tab === 'analysis' && (
+            <>
+              <span className="field-label">{t('settings.analysis.metrics')}</span>
+              {ANALYSIS_METRICS.map((m) => {
+                const on = settings.analysisMetrics.includes(m.id)
+                return (
+                  <label key={m.id} className="check-inline">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...settings.analysisMetrics, m.id]
+                          : settings.analysisMetrics.filter((x) => x !== m.id)
+                        void saveSettings({ analysisMetrics: next })
+                      }}
+                    />
+                    {t(`metric.${m.id}` as I18nKey)}
+                    <span className="metric-unit">{m.unit}</span>
+                    {m.needsAstats && <span className="metric-tag">{t('settings.analysis.extraPass')}</span>}
+                  </label>
+                )
+              })}
+              <p className="panel-hint">{t('settings.analysis.hint')}</p>
             </>
           )}
 

@@ -88,6 +88,29 @@ export async function runStage(
 }
 
 /**
+ * 從多軌 astats 的 stderr 取各軌 crest(Peak − RMS, dB)。
+ * filter_complex 裡每個 astats 實例的 log 以 `Parsed_astats_<n>` 標記,n 為宣告順序。
+ * 每個實例先印各聲道、最後印 Overall,取該群組最後一筆 Peak/RMS(即 Overall)。
+ */
+export function parseAstatsCrest(stderr: string, count: number): number[] {
+  const peak = new Map<number, number>()
+  const rms = new Map<number, number>()
+  const re = /Parsed_astats_(\d+) @ [^\]]*\]\s+(Peak|RMS) level dB:\s+(-?[\d.]+|inf)/g
+  for (const m of stderr.matchAll(re)) {
+    const idx = Number(m[1])
+    const val = m[3] === 'inf' ? -Infinity : Number(m[3])
+    ;(m[2] === 'Peak' ? peak : rms).set(idx, val)
+  }
+  // 依 filter 實例序號排序 → 對應軌序
+  const indices = [...new Set([...peak.keys(), ...rms.keys()])].sort((a, b) => a - b)
+  return indices.slice(0, count).map((i) => {
+    const p = peak.get(i)
+    const r = rms.get(i)
+    return p != null && r != null && Number.isFinite(p) && Number.isFinite(r) ? p - r : NaN
+  })
+}
+
+/**
  * 真峰值(true peak)限制器濾鏡片段。
  *
  * alimiter 只限制取樣點峰值(sample peak),對真實寬頻內容,取樣點之間的

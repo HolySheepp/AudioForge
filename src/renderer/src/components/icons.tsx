@@ -67,12 +67,14 @@ export const IconMoon = ({ size = 16 }: IconProps): React.JSX.Element =>
 export const IconAutoTheme = ({ size = 16 }: IconProps): React.JSX.Element =>
   base(size, <><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" /></>)
 
+// 對稱 5 條波形,與桌面/工作列 icon(build/icon.png)一致:中間最高、兩側對稱遞減
 export const IconLogo = ({ size = 18 }: IconProps): React.JSX.Element =>
   base(size, <>
-    <rect x="3" y="10" width="2.6" height="4" rx="1" />
-    <rect x="7.6" y="7" width="2.6" height="10" rx="1" />
-    <rect x="12.2" y="4" width="2.6" height="16" rx="1" />
-    <rect x="16.8" y="8" width="2.6" height="8" rx="1" />
+    <rect x="2.7" y="8.5" width="2.2" height="7" rx="1" />
+    <rect x="6.8" y="5.75" width="2.2" height="12.5" rx="1" />
+    <rect x="10.9" y="2.75" width="2.2" height="18.5" rx="1" />
+    <rect x="15" y="5.75" width="2.2" height="12.5" rx="1" />
+    <rect x="19.1" y="8.5" width="2.2" height="7" rx="1" />
   </>, true)
 
 export const IconDrop = ({ size = 30 }: IconProps): React.JSX.Element =>

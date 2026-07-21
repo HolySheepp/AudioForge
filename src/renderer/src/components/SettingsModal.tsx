@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
 import type { I18nKey } from '../i18n'
-import { ACCENTS, ANALYSIS_METRICS, MAX_ANALYSIS_LOAD } from '../../../shared/types'
+import { ACCENTS, ANALYSIS_METRICS, ANALYSIS_PASSES } from '../../../shared/types'
 import { FreeKnob } from './FreeKnob'
 import { ColorPicker } from './ColorPicker'
 
@@ -14,6 +14,7 @@ const LOAD_COLORS: Record<string, string> = {
   lufs: '#4f8cff',
   lra: '#42d65a',
   truePeak: '#faad42',
+  plr: '#ac86f9',
   crest: '#f76495'
 }
 
@@ -257,34 +258,36 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
                 )
               })}
 
-              <div className="load-row">
-                <span className="field-label">{t('settings.analysis.load')}</span>
-                <div className="load-bar">
-                  {ANALYSIS_METRICS.map((m) =>
-                    m.load > 0 && settings.analysisMetrics.includes(m.id) ? (
-                      <div
-                        key={m.id}
-                        className="load-seg"
-                        style={{
-                          width: `${(m.load / MAX_ANALYSIS_LOAD) * 100}%`,
-                          background: LOAD_COLORS[m.id]
-                        }}
-                      />
-                    ) : null
-                  )}
-                </div>
-                <span className="load-pct">
-                  {Math.round(
-                    (ANALYSIS_METRICS.filter((m) => settings.analysisMetrics.includes(m.id)).reduce(
-                      (s, m) => s + m.load,
-                      0
-                    ) /
-                      MAX_ANALYSIS_LOAD) *
-                      100
-                  )}
-                  %
-                </span>
-              </div>
+              {(() => {
+                // 負擔 = 需要的「讀取次數」/ 總讀取階段數。同一 pass 的指標共用一次讀取:
+                // 那個 pass 固定佔一份,由其勾選的指標平分顯示(勾越多不會變多,只會細分)
+                const maxPasses = ANALYSIS_PASSES.length
+                const perPass = 100 / maxPasses
+                const activePasses = ANALYSIS_PASSES.filter((p) =>
+                  ANALYSIS_METRICS.some((m) => m.pass === p && settings.analysisMetrics.includes(m.id))
+                )
+                const segs = activePasses.flatMap((p) => {
+                  const inPass = ANALYSIS_METRICS.filter(
+                    (m) => m.pass === p && settings.analysisMetrics.includes(m.id)
+                  )
+                  return inPass.map((m) => ({ id: m.id, width: perPass / inPass.length }))
+                })
+                return (
+                  <div className="load-row">
+                    <span className="field-label">{t('settings.analysis.load')}</span>
+                    <div className="load-bar">
+                      {segs.map((s) => (
+                        <div
+                          key={s.id}
+                          className="load-seg"
+                          style={{ width: `${s.width}%`, background: LOAD_COLORS[s.id] }}
+                        />
+                      ))}
+                    </div>
+                    <span className="load-pct">{Math.round(activePasses.length * perPass)}%</span>
+                  </div>
+                )
+              })()}
               <p className="panel-hint">{t('settings.analysis.hint')}</p>
             </>
           )}

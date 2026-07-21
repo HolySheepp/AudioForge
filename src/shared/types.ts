@@ -61,25 +61,25 @@ export interface TrackAnalysis {
 /**
  * 響度分析指標定義。id 為穩定鍵(存於 settings、job params)。
  * derived = 由既有 ebur128 數值算出(免費);needsAstats = 需額外 astats 測量。
- * load = 相對分析負擔:ebur128 一次讀取(lufs/lra/truePeak 共用)拆成三份;
- *        plr 為衍生,零成本;crest 需另跑一次 astats,約等於整個 ebur 讀取。
+ * pass = 該指標由哪一次檔案讀取產生——負擔以「讀取次數」計:
+ *        'ebur'(lufs/lra/truePeak/plr 共用一次)、'astats'(crest 另一次)。
  */
 export interface MetricDef {
   id: string
   unit: string
   derived: boolean
   needsAstats: boolean
-  load: number
+  pass: 'ebur' | 'astats'
 }
 export const ANALYSIS_METRICS: MetricDef[] = [
-  { id: 'lufs', unit: 'LUFS', derived: false, needsAstats: false, load: 1 },
-  { id: 'lra', unit: 'LU', derived: false, needsAstats: false, load: 1 },
-  { id: 'truePeak', unit: 'dBTP', derived: false, needsAstats: false, load: 1 },
-  { id: 'plr', unit: 'LU', derived: true, needsAstats: false, load: 0 },
-  { id: 'crest', unit: 'dB', derived: false, needsAstats: true, load: 3 }
+  { id: 'lufs', unit: 'LUFS', derived: false, needsAstats: false, pass: 'ebur' },
+  { id: 'lra', unit: 'LU', derived: false, needsAstats: false, pass: 'ebur' },
+  { id: 'truePeak', unit: 'dBTP', derived: false, needsAstats: false, pass: 'ebur' },
+  { id: 'plr', unit: 'LU', derived: true, needsAstats: false, pass: 'ebur' },
+  { id: 'crest', unit: 'dB', derived: false, needsAstats: true, pass: 'astats' }
 ]
-/** 全部勾選時的總負擔(百分比條的上限) */
-export const MAX_ANALYSIS_LOAD = ANALYSIS_METRICS.reduce((s, m) => s + m.load, 0)
+/** 分析會用到的所有讀取階段(負擔百分比 = 需要的階段數 / 這個總數) */
+export const ANALYSIS_PASSES = ['ebur', 'astats'] as const
 /** 預設分析的指標(crest 需另跑 astats,預設關) */
 export const DEFAULT_ANALYSIS_METRICS = ['lufs', 'lra', 'truePeak', 'plr']
 /** 預設釘到來源列的指標 */

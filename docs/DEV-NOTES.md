@@ -105,10 +105,14 @@ FAIL(true peak -0.4)、修好後 -1.3。
 (沒算的就不存在),`metricValue` 對缺值回 undefined,UI 顯示「—」。這讓設定裡的
 **負擔條**誠實——取消勾選是真的省一遍讀取,不是假的。
 
-負擔條:每個指標的 `load`(見 `ANALYSIS_METRICS`)= 相對讀取成本。lufs/lra/truePeak
-共用一次 ebur128,故各記 1;plr 衍生免費記 0;crest 需另一遍 astats,約等於整個
-ebur 讀取,記 3。條長 = 已勾 load 總和 / `MAX_ANALYSIS_LOAD`。顏色固定不設圖例
-(勾選時增長的那段自然對應)。
+負擔條(比例正確,以「讀取次數」計):每個指標標了 `pass`('ebur' / 'astats')。
+lufs/lra/truePeak/plr 同屬 ebur 一次讀取,crest 是 astats 另一次。條長 =
+啟用的 pass 數 / `ANALYSIS_PASSES.length`(= 2)。**同一 pass 佔固定一份(50%),
+由該 pass 內勾選的指標平分顯示**——勾越多不會讓總量變長,只會把那 50% 細分,
+因為它們共用同一次讀取。顏色固定不設圖例。
+
+⚠️ 別回到「每指標各記固定 load 相加」的舊模型——那會讓「只勾 LUFS」顯示 ~17%,
+但實際上已花掉整個 ebur 讀取(該 50%),比例不誠實。
 
 ## app 內調色盤(不用原生 input）
 

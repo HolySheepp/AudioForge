@@ -31,11 +31,18 @@ export function ColorPicker({ initial, onPreview, onSave, onCancel }: ColorPicke
   const hueRef = useRef<HTMLDivElement>(null)
 
   const hex = hsvToHex(hsv)
-  // onPreview 每次 render 都是新函式;放進 deps 會 saveSettings→重繪→再 preview 無限迴圈。
-  // 用 ref 穩定,effect 只依 hex(使用者實際改色時才觸發)
+  // onPreview 每次 render 都是新函式;放進 deps 會無限迴圈,用 ref 穩定。
+  // 跳過掛載時那一次——開盤瞬間不該改動當前顏色,要等使用者實際拖動才預覽
   const previewRef = useRef(onPreview)
   previewRef.current = onPreview
-  useEffect(() => previewRef.current(hex), [hex])
+  const firstRun = useRef(true)
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false
+      return
+    }
+    previewRef.current(hex)
+  }, [hex])
   useEffect(() => setHexText(hex), [hex])
 
   // ---- 面板拖曳 ----

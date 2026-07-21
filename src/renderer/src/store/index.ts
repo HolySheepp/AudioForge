@@ -115,7 +115,12 @@ export const useApp = create<AppState>((set, get) => ({
     void audio.play().catch(() => undefined)
   },
 
-  setTool: (tool) => set({ tool }),
+  setTool: (tool) =>
+    set((s) => ({
+      tool,
+      // 切到需單檔逐軌的功能時,把可能同時勾選的多個多軌檔收斂成獨佔一個
+      source: exclusive(s.source, null, tool)
+    })),
 
   addPaths: async (raw) => {
     const { files, skipped } = await window.api.expandPaths(raw)
@@ -144,15 +149,25 @@ export const useApp = create<AppState>((set, get) => ({
     for (const item of items) {
       window.api
         .probeFile(item.path)
-        .then((info) =>
-          set((s) => ({
+        .then((info) => {
+          let uncheckedName: string | null = null
+          set((s) => {
             // 軌數要 probe 完才知道,所以互斥規則得在這裡再收斂一次
-            source: exclusive(
-              s.source.map((it) => (it.id === item.id ? { ...it, info } : it)),
-              null
-            )
-          }))
-        )
+            const mapped = s.source.map((it) => (it.id === item.id ? { ...it, info } : it))
+            const next = exclusive(mapped, null, s.tool)
+            const before = mapped.find((it) => it.id === item.id)
+            const after = next.find((it) => it.id === item.id)
+            // 拖入的多軌檔被互斥取消勾選 → 記下來提示,免得使用者以為自己沒選到
+            if (before?.checked && after && isMultiTrack(after) && !after.checked) {
+              uncheckedName = info.name
+            }
+            return { source: next }
+          })
+          if (uncheckedName) {
+            const lang = get().settings?.language ?? 'zh'
+            get().toast(translate(lang, 'toast.multitrackUnchecked', { name: uncheckedName }))
+          }
+        })
         .catch(() =>
           set((s) => ({
             source: s.source.map((it) =>
@@ -166,8 +181,14 @@ export const useApp = create<AppState>((set, get) => ({
   removeSource: (id) =>
     set((s) => {
       const item = s.source.find((it) => it.id === id)
+      // 該檔沒有別的列共用路徑時,才清掉它的分析軌選擇
+      const analysisTracks = { ...s.analysisTracks }
+      if (item && !s.source.some((it) => it.id !== id && it.path === item.path)) {
+        delete analysisTracks[item.path]
+      }
       return {
         source: s.source.filter((it) => it.id !== id),
+        analysisTracks,
         // 被移除的正是選中的新音軌 → 一併清掉
         replaceAudio: item && item.path === s.replaceAudio ? null : s.replaceAudio
       }
@@ -176,17 +197,17 @@ export const useApp = create<AppState>((set, get) => ({
   setChecked: (id, v) =>
     set((s) => {
       const next = s.source.map((it) => (it.id === id ? { ...it, checked: v } : it))
-      return { source: v ? exclusive(next, id) : next }
+      return { source: v ? exclusive(next, id, s.tool) : next }
     }),
 
   checkAll: (v) =>
     set((s) => {
       const next = s.source.map((it) => ({ ...it, checked: v && !it.probeFailed }))
       // 全選是批次意圖 → 多軌檔讓位
-      return { source: v ? exclusive(next, null) : next }
+      return { source: v ? exclusive(next, null, s.tool) : next }
     }),
 
-  clearSource: () => set({ source: [], selectedPath: null, replaceAudio: null }),
+  clearSource: () => set({ source: [], selectedPath: null, replaceAudio: null, analysisTracks: {} }),
 
   moveToSource: (processedId) => {
     const { processed, source } = get()
@@ -267,12 +288,20 @@ export function isMultiTrack(it: SourceItem): boolean {
 }
 
 /**
+ * 需要「單檔逐軌參數」的功能:面板只綁一個檔案的軌配置,故多軌檔須與批次互斥。
+ * analysis(逐檔卡片,各檔獨立)與 mixdown(跨檔混音)不受此限。
+ */
+const SHARED_TRACK_TOOLS = new Set<ToolId>(['normalize', 'convert', 'extract', 'replace'])
+
+/**
  * 多軌與批次互斥:勾選集合裡最多只能有一個多軌檔,且它一旦入選就得獨佔。
+ * 僅對 SHARED_TRACK_TOOLS 生效——其他功能可安全同時處理多個多軌檔。
  *
  * priorityId = 使用者剛剛親手勾的項目,它的意圖優先。沒有(全選、拖入、probe 完成
  * 這類非針對性的變動)時則讓批次贏——多軌檔被取消勾選,使用者再單獨點它即可獨佔。
  */
-function exclusive(source: SourceItem[], priorityId: string | null): SourceItem[] {
+function exclusive(source: SourceItem[], priorityId: string | null, tool: ToolId): SourceItem[] {
+  if (!SHARED_TRACK_TOOLS.has(tool)) return source
   const checked = source.filter((it) => it.checked)
   if (checked.length <= 1) return source
 

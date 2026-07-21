@@ -77,9 +77,14 @@ interface TrackCtx {
 function useTrackCtx(): TrackCtx {
   const source = useApp((s) => s.source)
   return useMemo(() => {
-    const item = source.find((it) => it.checked && it.info) ?? null
+    // 逐軌介面優先綁「第一個勾選的影片」;replace 情境下音訊列雖也 checked,
+    // 但目標軌屬於影片,若被前面的音訊搶走會讓多軌選單消失
+    const checked = source.filter((it) => it.checked && it.info)
+    const item = checked.find((it) => it.info!.hasVideo) ?? checked[0] ?? null
     const streams = item?.info?.audioStreams ?? []
-    return { item, streams, perTrack: Boolean(item?.info?.hasVideo) && streams.length > 0 }
+    // 影片一律逐軌;純音訊只有多軌時才逐軌(單軌音訊維持簡潔介面)
+    const perTrack = streams.length > 0 && (Boolean(item?.info?.hasVideo) || streams.length > 1)
+    return { item, streams, perTrack }
   }, [source])
 }
 
@@ -160,7 +165,8 @@ function AnalysisPanel(): React.JSX.Element {
   const copyTable = (): void => {
     const header = ['File', 'Track', ...metrics.map((m) => m.id)].join('\t')
     const lines: string[] = []
-    for (const it of source) {
+    // 只匯出畫面上卡片對應的檔案(已勾選),與顯示一致
+    for (const it of files) {
       for (const a of it.analysis ?? []) {
         const cols = metrics.map((m) => metricValue(a, m.id)?.toFixed(1) ?? '')
         lines.push([it.info?.name ?? it.path, a.track + 1, ...cols].join('\t'))
@@ -293,16 +299,22 @@ function NormalizePanel(): React.JSX.Element {
   const [p, update] = useToolParams<NormalizeParams>('normalize')
   const { streams, perTrack } = useTrackCtx()
 
+  // 單軌介面也寫進 tracks[0](而非另存 lufs/tp),讓純音訊與逐軌走同一份參數——
+  // 混批(影片+音訊)時音訊檔才不會吃到看不見的舊單軌值
+  const t0 = p.tracks[0] ?? NORMALIZE_TRACK_DEFAULT
+  const setT0 = (patch: { lufs?: number; tp?: number }): void =>
+    update({ tracks: [{ ...t0, action: 'normalize', ...patch }, ...p.tracks.slice(1)] })
+
   if (!perTrack) {
     return (
       <div className="panel-inner">
         <button
-          className={`preset-btn${p.lufs === -14 && p.tp === -1 ? ' active' : ''}`}
-          onClick={() => update({ lufs: -14, tp: -1 })}
+          className={`preset-btn${t0.lufs === -14 && t0.tp === -1 ? ' active' : ''}`}
+          onClick={() => setT0({ lufs: -14, tp: -1 })}
         >
           {t('param.preset.streaming')}
         </button>
-        <LoudnessKnobs idPrefix="normalize" lufs={p.lufs} tp={p.tp} onChange={update} />
+        <LoudnessKnobs idPrefix="normalize" lufs={t0.lufs} tp={t0.tp} onChange={setT0} />
       </div>
     )
   }

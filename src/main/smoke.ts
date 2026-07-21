@@ -12,7 +12,7 @@ import { probeFile } from './ffmpeg/probe'
 import { queue } from './queue'
 import { registerAllTools } from './tools'
 import { parseEbur128Summaries } from './tools/common'
-import { updateSettings } from './settings'
+import { getSettings, updateSettings } from './settings'
 import { hapticTest } from './haptics'
 import type { JobSpec, JobUpdate } from '../shared/types'
 
@@ -87,7 +87,15 @@ export async function runSmoke(): Promise<void> {
     '-c:a', 'aac', '-b:a', '192k',
     video
   ])
-  check('test media generated', existsSync(wavA) && existsSync(video))
+  // 雙軌純音訊(mka):驗證多軌純音訊也走逐軌路徑
+  const twoTrackAudio = join(dir, 'two.mka')
+  await ff([
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4',
+    '-f', 'lavfi', '-i', 'sine=frequency=880:duration=4',
+    '-map', '0:a', '-map', '1:a', '-c:a', 'aac', '-b:a', '128k',
+    twoTrackAudio
+  ])
+  check('test media generated', existsSync(wavA) && existsSync(video) && existsSync(twoTrackAudio))
 
   // ---- 1. analysis(單軌 + 影片雙軌逐軌)----
   const a1 = await runJob(spec('analysis', wavA, {}))
@@ -112,6 +120,8 @@ export async function runSmoke(): Promise<void> {
   }
 
   // crest(astats)逐軌解析:啟用後兩軌各有有限 crest,且順序正確對應
+  // 冒煙會暫時改 analysisMetrics,測完還原,避免污染使用者的 settings.json
+  const savedMetrics = getSettings().analysisMetrics
   updateSettings({ analysisMetrics: ['lufs', 'lra', 'truePeak', 'plr', 'crest'] })
   const ac = await runJob(spec('analysis', video, { tracks: [0, 1] }))
   check(
@@ -129,7 +139,7 @@ export async function runSmoke(): Promise<void> {
     acOnly.analysis?.[0]?.integrated == null && Number.isFinite(acOnly.analysis?.[0]?.crest ?? NaN),
     `integrated=${acOnly.analysis?.[0]?.integrated} crest=${acOnly.analysis?.[0]?.crest}`
   )
-  updateSettings({ analysisMetrics: ['lufs', 'lra', 'truePeak', 'plr'] })
+  updateSettings({ analysisMetrics: savedMetrics })
 
   // ---- 2. normalize(wav → -14 LUFS ±0.5)----
   const n1 = await runJob(spec('normalize', wavA, { lufs: -14, tp: -1 }))
@@ -188,6 +198,23 @@ export async function runSmoke(): Promise<void> {
     check('mixdown stereo', info.audioStreams[0]?.channels === 2)
     check('mixdown wav 24-bit', info.audioStreams[0]?.codec === 'pcm_s24le', info.audioStreams[0]?.codec)
     check('mixdown keeps sample rate', info.audioStreams[0]?.sampleRate === 48000)
+  }
+
+  // ---- 4.7 純音訊多軌逐軌 normalize(separate,保留兩軌)----
+  const ma = await runJob(
+    spec('normalize', twoTrackAudio, {
+      tracks: [
+        { action: 'normalize', lufs: -20, tp: -1 },
+        { action: 'normalize', lufs: -14, tp: -1 }
+      ],
+      output: 'separate'
+    })
+  )
+  check('multitrack-audio normalize job', ma.status === 'done', ma.errorTail ?? '')
+  if (ma.outputs?.[0]) {
+    const info = await probeFile(ma.outputs[0])
+    check('multitrack-audio keeps 2 tracks', info.audioStreams.length === 2, `${info.audioStreams.length}`)
+    check('multitrack-audio has no video', !info.hasVideo)
   }
 
   // ---- 5. replace(keepVideo,畫面流 copy)----

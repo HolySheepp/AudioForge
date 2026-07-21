@@ -677,6 +677,10 @@
   border-top-left-radius: 999px;
   border-bottom-left-radius: 999px;
 }
+.load-seg:last-child {
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+}
 .load-pct {
   font-size: 12px;
   font-variant-numeric: tabular-nums;

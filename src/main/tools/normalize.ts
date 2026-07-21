@@ -26,20 +26,27 @@ const TRACK_DEFAULT: TrackCfg = { action: 'normalize', lufs: -14, tp: -1 }
  *
  * 影片檔走逐軌路徑:各音軌可分別設定目標,一次讀取測完所有軌,
  * 再一次寫回(混成一軌或保留各軌),畫面流 copy、零中間檔。
- * 純音訊檔走單軌路徑,維持同格式輸出。
+ * 單軌純音訊檔走單軌路徑,維持同格式輸出。
  */
 export const normalizeRunner: ToolRunner = async (ctx) => {
   const info = await probeFile(ctx.spec.path)
   if (info.audioStreams.length === 0) throw new FFmpegError('no audio stream')
-  return info.hasVideo ? perTrack(ctx, info) : singleTrack(ctx, info)
+  // 逐軌路徑:影片(即使單軌),或多軌純音訊檔;其餘走單軌
+  const perTrackPath = info.hasVideo || info.audioStreams.length > 1
+  return perTrackPath ? perTrack(ctx, info) : singleTrack(ctx, info)
 }
 
 /** 純音訊檔:只處理第一軌,同格式輸出 */
 async function singleTrack(ctx: JobContext, info: MediaInfo): Promise<ToolResult> {
-  const cfgs = resolveTrackCfgs<TrackCfg>(ctx.spec.params['tracks'], 1, TRACK_DEFAULT)
-  // 音訊檔的介面送的是單軌欄位;逐軌陣列若存在(混批時)取第一軌
-  const I = Number(ctx.spec.params['lufs'] ?? cfgs[0].lufs)
-  const TP = Number(ctx.spec.params['tp'] ?? cfgs[0].tp)
+  // 目標一律取自 tracks[0](UI 單軌與逐軌都寫這裡);tracks 不存在時退回舊 lufs/tp 欄位
+  const fallback: TrackCfg = {
+    action: 'normalize',
+    lufs: Number(ctx.spec.params['lufs'] ?? TRACK_DEFAULT.lufs),
+    tp: Number(ctx.spec.params['tp'] ?? TRACK_DEFAULT.tp)
+  }
+  const cfgs = resolveTrackCfgs<TrackCfg>(ctx.spec.params['tracks'], 1, fallback)
+  const I = cfgs[0].lufs
+  const TP = cfgs[0].tp
   const audio = info.audioStreams[0]
 
   // Pass 1:測量

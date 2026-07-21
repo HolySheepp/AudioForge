@@ -64,6 +64,10 @@ export function StatusBar(): React.JSX.Element {
 
     // 分析:逐檔的軌選擇來自卡片(analysisTracks);未選任何軌的檔案跳過
     if (tool === 'analysis') {
+      if ((settings.analysisMetrics?.length ?? 0) === 0) {
+        toast(t('toast.noMetrics'))
+        return
+      }
       const analysisTracks = useApp.getState().analysisTracks
       const specs: JobSpec[] = []
       for (const it of candidates) {

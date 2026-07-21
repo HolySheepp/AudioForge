@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useApp } from '../store'
+import { useApp, applyAccent } from '../store'
+import { normalizeHex } from '../utils/color'
 import { useT } from '../hooks/useT'
 import type { I18nKey } from '../i18n'
 import { ACCENTS, ANALYSIS_METRICS, ANALYSIS_PASSES } from '../../../shared/types'
@@ -35,12 +36,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
 
   // 調色盤開啟:只渲染調色盤,設定面板與變暗遮罩都收起,讓使用者以原亮度預覽主界面
   if (picking !== null) {
+    // 起點 = 當前實際生效的副色(即使目前是內建色也解析成 hex),而非寫死藍色
+    const currentHex =
+      normalizeHex(getComputedStyle(document.documentElement).getPropertyValue('--accent')) ??
+      (settings.accent.startsWith('#') ? settings.accent : '#4f8cff')
     return (
       <ColorPicker
-        initial={settings.accent.startsWith('#') ? settings.accent : '#4f8cff'}
-        onPreview={(hex) => void saveSettings({ accent: hex })}
+        initial={currentHex}
+        // 預覽只改 CSS 變數(不落盤),避免每次拖動都寫一次設定檔
+        onPreview={(hex) => applyAccent(hex)}
         onCancel={() => {
-          void saveSettings({ accent: picking })
+          applyAccent(picking) // 還原成開盤前的副色(設定檔從未被動過)
           setPicking(null)
         }}
         onSave={(hex) => {

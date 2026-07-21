@@ -110,13 +110,9 @@ export const zh = {
   'param.mt.limiter': '混音後保險限制器',
 
   // 分析結果
-  'analysis.integrated': '整體響度',
-  'analysis.range': '響度範圍',
-  'analysis.truePeak': 'True Peak',
   'analysis.copyTable': '複製結果表',
   'analysis.pinLabel': '釘選到來源列',
   'analysis.empty': '勾選來源檔案後,可分析的音軌會列在這裡',
-  'analysis.notAnalyzed': '尚未分析',
   'metric.lufs': '響度',
   'metric.lra': 'LRA',
   'metric.truePeak': 'True Peak',
@@ -205,6 +201,8 @@ export const zh = {
   // Toast
   'toast.unsupportedFiles': '已略過 {n} 個不支援的檔案',
   'toast.noChecked': '沒有勾選任何檔案',
+  'toast.noMetrics': '請先在設定的「響度分析」勾選至少一個指標',
+  'toast.multitrackUnchecked': '多軌檔「{name}」需單獨處理,已取消勾選',
   'toast.jobsStarted': '已開始 {n} 個任務',
   'toast.confirmQuit': '仍有任務處理中,確定要關閉嗎?',
 

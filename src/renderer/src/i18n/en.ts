@@ -99,13 +99,9 @@ export const en: Record<I18nKey, string> = {
   'param.mt.outputSeparate': 'Keep tracks separate',
   'param.mt.limiter': 'Safety limiter after mix',
 
-  'analysis.integrated': 'Integrated',
-  'analysis.range': 'Range',
-  'analysis.truePeak': 'True Peak',
   'analysis.copyTable': 'Copy results',
   'analysis.pinLabel': 'Pin to source list',
   'analysis.empty': 'Check source files to see analyzable tracks here',
-  'analysis.notAnalyzed': 'Not analyzed yet',
   'metric.lufs': 'Loudness',
   'metric.lra': 'LRA',
   'metric.truePeak': 'True Peak',
@@ -188,6 +184,8 @@ export const en: Record<I18nKey, string> = {
 
   'toast.unsupportedFiles': 'Skipped {n} unsupported file(s)',
   'toast.noChecked': 'No files checked',
+  'toast.noMetrics': 'Enable at least one metric in Settings › Loudness Analysis',
+  'toast.multitrackUnchecked': 'Multi-track file "{name}" is processed on its own — unchecked',
   'toast.jobsStarted': 'Started {n} job(s)',
   'toast.confirmQuit': 'Jobs are still running. Quit anyway?',
 

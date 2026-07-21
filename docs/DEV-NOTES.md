@@ -100,6 +100,16 @@ FAIL(true peak -0.4)、修好後 -1.3。
 都存 settings。多軌 astats 的 crest 靠 `Parsed_astats_<n>` log 標記對應軌序(見
 `common.ts` 的 `parseAstatsCrest`)。
 
+**runner 依勾選跳過 pass**:`analysis.ts` 只在有勾 ebur 類指標(lufs/lra/truePeak/plr)
+時才跑 ebur128,只在勾 crest 時才跑 astats。因此 `TrackAnalysis` 的數值欄位全為可選
+(沒算的就不存在),`metricValue` 對缺值回 undefined,UI 顯示「—」。這讓設定裡的
+**負擔條**誠實——取消勾選是真的省一遍讀取,不是假的。
+
+負擔條:每個指標的 `load`(見 `ANALYSIS_METRICS`)= 相對讀取成本。lufs/lra/truePeak
+共用一次 ebur128,故各記 1;plr 衍生免費記 0;crest 需另一遍 astats,約等於整個
+ebur 讀取,記 3。條長 = 已勾 load 總和 / `MAX_ANALYSIS_LOAD`。顏色固定不設圖例
+(勾選時增長的那段自然對應)。
+
 ## app 內調色盤(不用原生 input）
 
 `components/ColorPicker.tsx`:自製 HSV 色板 + 色相條 + hex,可拖曳,Save/Cancel。

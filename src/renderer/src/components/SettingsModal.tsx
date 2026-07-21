@@ -2,12 +2,20 @@ import { useState } from 'react'
 import { useApp } from '../store'
 import { useT } from '../hooks/useT'
 import type { I18nKey } from '../i18n'
-import { ACCENTS, ANALYSIS_METRICS } from '../../../shared/types'
+import { ACCENTS, ANALYSIS_METRICS, MAX_ANALYSIS_LOAD } from '../../../shared/types'
 import { FreeKnob } from './FreeKnob'
 import { ColorPicker } from './ColorPicker'
 
 const TABS = ['general', 'appearance', 'analysis', 'haptics', 'hardware'] as const
 type Tab = (typeof TABS)[number]
+
+/** 負擔條各指標的固定顏色(不設圖例,靠顏色與勾選時的增長自行對應) */
+const LOAD_COLORS: Record<string, string> = {
+  lufs: '#4f8cff',
+  lra: '#42d65a',
+  truePeak: '#faad42',
+  crest: '#f76495'
+}
 
 export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.Element | null {
   const t = useT()
@@ -248,6 +256,35 @@ export function SettingsModal({ onClose }: { onClose: () => void }): React.JSX.E
                   </label>
                 )
               })}
+
+              <div className="load-row">
+                <span className="field-label">{t('settings.analysis.load')}</span>
+                <div className="load-bar">
+                  {ANALYSIS_METRICS.map((m) =>
+                    m.load > 0 && settings.analysisMetrics.includes(m.id) ? (
+                      <div
+                        key={m.id}
+                        className="load-seg"
+                        style={{
+                          width: `${(m.load / MAX_ANALYSIS_LOAD) * 100}%`,
+                          background: LOAD_COLORS[m.id]
+                        }}
+                      />
+                    ) : null
+                  )}
+                </div>
+                <span className="load-pct">
+                  {Math.round(
+                    (ANALYSIS_METRICS.filter((m) => settings.analysisMetrics.includes(m.id)).reduce(
+                      (s, m) => s + m.load,
+                      0
+                    ) /
+                      MAX_ANALYSIS_LOAD) *
+                      100
+                  )}
+                  %
+                </span>
+              </div>
               <p className="panel-hint">{t('settings.analysis.hint')}</p>
             </>
           )}

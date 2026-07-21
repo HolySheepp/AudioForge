@@ -102,15 +102,13 @@ export async function runSmoke(): Promise<void> {
   check(
     'analysis per-track (2 tracks)',
     a2.status === 'done' && a2.analysis?.length === 2,
-    a2.analysis?.map((x) => `t${x.track}:${x.integrated.toFixed(1)}`).join(' ') ?? (a2.errorTail ?? '')
+    a2.analysis?.map((x) => `t${x.track}:${x.integrated?.toFixed(1)}`).join(' ') ?? (a2.errorTail ?? '')
   )
   if (a2.analysis?.length === 2) {
     // 兩軌音量刻意不同(440Hz 較大、880Hz 較小),逐軌測量必須測出差異
-    check(
-      'analysis tracks differ',
-      Math.abs(a2.analysis[0].integrated - a2.analysis[1].integrated) > 1,
-      `${a2.analysis[0].integrated} vs ${a2.analysis[1].integrated}`
-    )
+    const i0 = a2.analysis[0].integrated ?? NaN
+    const i1 = a2.analysis[1].integrated ?? NaN
+    check('analysis tracks differ', Math.abs(i0 - i1) > 1, `${i0} vs ${i1}`)
   }
 
   // crest(astats)逐軌解析:啟用後兩軌各有有限 crest,且順序正確對應
@@ -122,6 +120,14 @@ export async function runSmoke(): Promise<void> {
       Number.isFinite(ac.analysis[0].crest ?? NaN) &&
       Number.isFinite(ac.analysis[1].crest ?? NaN),
     ac.analysis?.map((x) => `t${x.track}:crest ${x.crest?.toFixed(1)}`).join(' ') ?? (ac.errorTail ?? '')
+  )
+  // 只勾 crest → 跳過 ebur128,integrated 應為空(證明取消勾選真的省一遍讀取)
+  updateSettings({ analysisMetrics: ['crest'] })
+  const acOnly = await runJob(spec('analysis', video, { tracks: [0] }))
+  check(
+    'analysis crest-only skips ebur',
+    acOnly.analysis?.[0]?.integrated == null && Number.isFinite(acOnly.analysis?.[0]?.crest ?? NaN),
+    `integrated=${acOnly.analysis?.[0]?.integrated} crest=${acOnly.analysis?.[0]?.crest}`
   )
   updateSettings({ analysisMetrics: ['lufs', 'lra', 'truePeak', 'plr'] })
 

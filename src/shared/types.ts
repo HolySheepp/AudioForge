@@ -41,37 +41,51 @@ export interface AnalysisResult {
   truePeak: number
 }
 
-/** 單一音軌的分析結果;多音軌檔案每軌各一筆 */
-export interface TrackAnalysis extends AnalysisResult {
+/**
+ * 單一音軌的分析結果;多音軌檔案每軌各一筆。
+ * 各欄位皆可選——只計算設定裡有勾選的指標,沒算的就不存在。
+ */
+export interface TrackAnalysis {
   /** 第幾條音軌(0-based,以音軌計) */
   track: number
-  /** Crest factor(Peak − RMS, dB);僅在設定啟用時測量 */
+  /** Integrated loudness (LUFS) */
+  integrated?: number
+  /** Loudness range (LU) */
+  range?: number
+  /** True peak (dBTP) */
+  truePeak?: number
+  /** Crest factor(Peak − RMS, dB) */
   crest?: number
 }
 
 /**
- * 響度分析指標定義。id 為穩定鍵(存於 settings、job params);
+ * 響度分析指標定義。id 為穩定鍵(存於 settings、job params)。
  * derived = 由既有 ebur128 數值算出(免費);needsAstats = 需額外 astats 測量。
+ * load = 相對分析負擔:ebur128 一次讀取(lufs/lra/truePeak 共用)拆成三份;
+ *        plr 為衍生,零成本;crest 需另跑一次 astats,約等於整個 ebur 讀取。
  */
 export interface MetricDef {
   id: string
   unit: string
   derived: boolean
   needsAstats: boolean
+  load: number
 }
 export const ANALYSIS_METRICS: MetricDef[] = [
-  { id: 'lufs', unit: 'LUFS', derived: false, needsAstats: false },
-  { id: 'lra', unit: 'LU', derived: false, needsAstats: false },
-  { id: 'truePeak', unit: 'dBTP', derived: false, needsAstats: false },
-  { id: 'plr', unit: 'LU', derived: true, needsAstats: false },
-  { id: 'crest', unit: 'dB', derived: false, needsAstats: true }
+  { id: 'lufs', unit: 'LUFS', derived: false, needsAstats: false, load: 1 },
+  { id: 'lra', unit: 'LU', derived: false, needsAstats: false, load: 1 },
+  { id: 'truePeak', unit: 'dBTP', derived: false, needsAstats: false, load: 1 },
+  { id: 'plr', unit: 'LU', derived: true, needsAstats: false, load: 0 },
+  { id: 'crest', unit: 'dB', derived: false, needsAstats: true, load: 3 }
 ]
+/** 全部勾選時的總負擔(百分比條的上限) */
+export const MAX_ANALYSIS_LOAD = ANALYSIS_METRICS.reduce((s, m) => s + m.load, 0)
 /** 預設分析的指標(crest 需另跑 astats,預設關) */
 export const DEFAULT_ANALYSIS_METRICS = ['lufs', 'lra', 'truePeak', 'plr']
 /** 預設釘到來源列的指標 */
 export const DEFAULT_PINNED_METRICS = ['lufs', 'lra', 'truePeak']
 
-/** 從分析結果取某指標值(plr 為衍生) */
+/** 從分析結果取某指標值(plr 為衍生;來源值缺一則回 undefined) */
 export function metricValue(a: TrackAnalysis, id: string): number | undefined {
   switch (id) {
     case 'lufs':
@@ -81,7 +95,7 @@ export function metricValue(a: TrackAnalysis, id: string): number | undefined {
     case 'truePeak':
       return a.truePeak
     case 'plr':
-      return a.truePeak - a.integrated
+      return a.truePeak != null && a.integrated != null ? a.truePeak - a.integrated : undefined
     case 'crest':
       return a.crest
     default:

@@ -654,6 +654,36 @@
   border: 1px solid var(--border);
   color: var(--text-dim);
 }
+.load-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.load-bar {
+  flex: 1;
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.load-seg {
+  height: 100%;
+  transition: width 140ms ease;
+}
+.load-seg:first-child {
+  border-top-left-radius: 999px;
+  border-bottom-left-radius: 999px;
+}
+.load-pct {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  min-width: 34px;
+  text-align: right;
+}
 
 /* ===== 旋鈕 ===== */
 .knob {

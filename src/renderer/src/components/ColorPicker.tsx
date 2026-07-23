@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useT } from '../hooks/useT'
 import { hexToHsv, hsvToHex, type Hsv } from '../utils/color'
@@ -24,11 +24,26 @@ export function ColorPicker({ initial, onPreview, onSave, onCancel }: ColorPicke
   const t = useT()
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(initial) ?? { h: 217, s: 0.7, v: 1 })
   const [hexText, setHexText] = useState(initial)
-  // 面板起始位置:畫面偏右上,避免擋住主界面中央
-  const [pos, setPos] = useState(() => ({ x: window.innerWidth - 320, y: 96 }))
+  // 起始位置先給粗略中心,掛載後用實際尺寸精算置中(高度不固定)
+  const [pos, setPos] = useState(() => ({
+    x: Math.max(8, (window.innerWidth - 252) / 2),
+    y: Math.max(8, (window.innerHeight - 320) / 2)
+  }))
   const dragOff = useRef<{ x: number; y: number } | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const svRef = useRef<HTMLDivElement>(null)
   const hueRef = useRef<HTMLDivElement>(null)
+
+  // 掛載時依實際寬高置中一次(之後拖曳不再干預)
+  useLayoutEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setPos({
+      x: Math.max(8, (window.innerWidth - r.width) / 2),
+      y: Math.max(8, (window.innerHeight - r.height) / 2)
+    })
+  }, [])
 
   const hex = hsvToHex(hsv)
   // onPreview 每次 render 都是新函式;放進 deps 會無限迴圈,用 ref 穩定。
@@ -97,7 +112,12 @@ export function ColorPicker({ initial, onPreview, onSave, onCancel }: ColorPicke
   const hueColor = hsvToHex({ h: hsv.h, s: 1, v: 1 })
 
   return createPortal(
-    <div className="colorpicker" style={{ left: pos.x, top: pos.y }}>
+    // 邊框用當前正在挑的顏色(開盤時即當前副色),加粗讓浮動面板更明顯
+    <div
+      ref={rootRef}
+      className="colorpicker"
+      style={{ left: pos.x, top: pos.y, borderColor: hex, borderWidth: 3 }}
+    >
       <div
         className="cp-header"
         onPointerDown={onHeaderDown}

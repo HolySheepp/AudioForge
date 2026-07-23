@@ -481,19 +481,17 @@ function ExtractPanel(): React.JSX.Element {
 /**
  * 混音:湯底(base)+ 材料(ingredients)卡片制。
  *
- * 上方是所有已勾選檔案的音軌小卡(可跨檔案、跨影片/音訊選取);下方是混音卡佇列,
- * 恆有一張尾端空卡待填。點軌道小卡 = 指派給「目前作用中」的混音卡(未滿湯底先填
- * 湯底,已有湯底則加材料;已指派的再點一次 = 取消)。點混音卡本體切換哪張是作用中。
- *
- * 湯底決定輸出:屬於影片 → 輸出整部影片(該軌被取代,其餘原封不動,無格式選項);
- * 屬於純音訊檔 → 輸出新音訊檔,此時才顯示格式/取樣率選項。
+ * 每張混音卡有兩個可點區塊(主音軌 / 混入);點區塊 = 選定現在要填哪一格,再點
+ * 上方音軌列把音軌填進去。不需要點卡片本身。主音軌決定輸出:屬於影片 → 輸出整部
+ * 影片(該軌被取代,其餘原封不動,無格式選項);屬於純音訊檔 → 輸出新音訊檔,此時
+ * 才顯示格式/取樣率選項。(base=主音軌、ingredient=混入,只是內部用詞)
  */
 function MixdownPanel(): React.JSX.Element {
   const t = useT()
   const source = useApp((s) => s.source)
   const mixCards = useApp((s) => s.mixCards)
-  const activeMixCardId = useApp((s) => s.activeMixCardId)
-  const setMixCardActive = useApp((s) => s.setMixCardActive)
+  const activeMixSlot = useApp((s) => s.activeMixSlot)
+  const setMixActiveSlot = useApp((s) => s.setMixActiveSlot)
   const mixToggleTrack = useApp((s) => s.mixToggleTrack)
   const mixRemoveRef = useApp((s) => s.mixRemoveRef)
   const mixUpdateCard = useApp((s) => s.mixUpdateCard)
@@ -528,69 +526,74 @@ function MixdownPanel(): React.JSX.Element {
     )
   }
 
+  const activeKind = activeMixSlot.kind
+
   return (
     <div className="panel-inner mixdown-panel">
-      <div className="mix-pool">
-        {files.flatMap((it) =>
-          it.info!.audioStreams.map((st, i) => {
-            const { baseOf, ingredientOf } = roleOf(it.path, i)
-            const assigned = baseOf >= 0 || ingredientOf.length > 0
-            return (
-              <button
-                key={`${it.path}#${i}`}
-                className={`mix-track-chip${assigned ? ' assigned' : ''}${baseOf >= 0 ? ' is-base' : ''}`}
-                onClick={() => mixToggleTrack(it.path, i)}
-                title={`${it.info!.name} · ${t('param.track', { n: i + 1 })} · ${st.codec}`}
-              >
-                <span className="mtc-name">
-                  {multiFile ? it.info!.name : t('param.track', { n: i + 1 })}
-                </span>
-                {it.info!.audioStreams.length > 1 && multiFile && (
-                  <span className="mtc-track">{t('param.track', { n: i + 1 })}</span>
-                )}
-                {baseOf >= 0 && (
-                  <span className="mtc-badge base">{t('mixdown.baseBadge', { n: baseOf + 1 })}</span>
-                )}
-                {ingredientOf.map((ci) => (
-                  <span key={ci} className="mtc-badge ing">
-                    {t('mixdown.ingredientBadge', { n: ci + 1 })}
+      {/* 指示列 + 音軌列:讓「先選區塊、再點這裡的音軌」一眼看懂 */}
+      <div className="mix-picker">
+        <div className="mix-instruction">
+          <span className="mix-step">↓</span>
+          {activeKind === 'base' ? t('mixdown.instrMain') : t('mixdown.instrMixin')}
+        </div>
+        <div className={`mix-pool for-${activeKind}`}>
+          {files.flatMap((it) =>
+            it.info!.audioStreams.map((st, i) => {
+              const { baseOf, ingredientOf } = roleOf(it.path, i)
+              const assigned = baseOf >= 0 || ingredientOf.length > 0
+              return (
+                <button
+                  key={`${it.path}#${i}`}
+                  className={`mix-track-chip${assigned ? ' assigned' : ''}${baseOf >= 0 ? ' is-base' : ''}`}
+                  onClick={() => mixToggleTrack(it.path, i)}
+                  title={`${it.info!.name} · ${t('param.track', { n: i + 1 })} · ${st.codec}`}
+                >
+                  <span className="mtc-name">
+                    {multiFile ? it.info!.name : t('param.track', { n: i + 1 })}
                   </span>
-                ))}
-              </button>
-            )
-          })
-        )}
+                  {it.info!.audioStreams.length > 1 && multiFile && (
+                    <span className="mtc-track">{t('param.track', { n: i + 1 })}</span>
+                  )}
+                  {baseOf >= 0 && (
+                    <span className="mtc-badge base">{t('mixdown.baseBadge', { n: baseOf + 1 })}</span>
+                  )}
+                  {ingredientOf.map((ci) => (
+                    <span key={ci} className="mtc-badge ing">
+                      {t('mixdown.ingredientBadge', { n: ci + 1 })}
+                    </span>
+                  ))}
+                </button>
+              )
+            })
+          )}
+        </div>
       </div>
 
       <div className="mix-cards">
         {mixCards.map((card, i) => {
           const baseItem = card.base ? pathToItem.get(card.base.path) : undefined
           const baseIsVideo = Boolean(baseItem?.info?.hasVideo)
-          const isActive = card.id === activeMixCardId
+          const baseActive = activeMixSlot.cardId === card.id && activeKind === 'base'
+          const ingActive = activeMixSlot.cardId === card.id && activeKind === 'ingredient'
           const canRemove = card.base != null || card.ingredients.length > 0
 
           return (
-            <div
-              key={card.id}
-              className={`mix-card${isActive ? ' active' : ''}`}
-              onClick={() => setMixCardActive(card.id)}
-            >
+            <div key={card.id} className="mix-card">
               <div className="mix-card-head">
                 <b>{t('mixdown.cardTitle', { n: i + 1 })}</b>
                 {canRemove && (
-                  <button
-                    className="row-x"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      mixRemoveCard(card.id)
-                    }}
-                  >
+                  <button className="row-x" onClick={() => mixRemoveCard(card.id)}>
                     ✕
                   </button>
                 )}
               </div>
 
-              <div className="mix-slot mix-slot-base">
+              <div
+                className={`mix-slot mix-slot-base${baseActive ? ' active' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => setMixActiveSlot(card.id, 'base')}
+              >
                 <span className="mix-slot-label">{t('mixdown.base')}</span>
                 {card.base ? (
                   <span className="mix-chip">
@@ -605,14 +608,23 @@ function MixdownPanel(): React.JSX.Element {
                     </button>
                   </span>
                 ) : (
-                  <span className="mix-slot-hint">{t('mixdown.pickBase')}</span>
+                  <span className="mix-slot-hint">
+                    {baseActive ? t('mixdown.pickBaseActive') : t('mixdown.pickBase')}
+                  </span>
                 )}
               </div>
 
-              <div className="mix-slot mix-slot-ingredients">
+              <div
+                className={`mix-slot mix-slot-ingredients${ingActive ? ' active' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => setMixActiveSlot(card.id, 'ingredient')}
+              >
                 <span className="mix-slot-label">{t('mixdown.ingredients')}</span>
                 {card.ingredients.length === 0 && (
-                  <span className="mix-slot-hint">{t('mixdown.pickIngredient')}</span>
+                  <span className="mix-slot-hint">
+                    {ingActive ? t('mixdown.pickIngredientActive') : t('mixdown.pickIngredient')}
+                  </span>
                 )}
                 {card.ingredients.map((ref) => (
                   <span key={`${ref.path}#${ref.track}`} className="mix-chip">
@@ -630,7 +642,7 @@ function MixdownPanel(): React.JSX.Element {
               </div>
 
               {card.base && (
-                <div className="mix-card-params" onClick={(e) => e.stopPropagation()}>
+                <div className="mix-card-params">
                   <label className="check-inline">
                     <input
                       type="checkbox"

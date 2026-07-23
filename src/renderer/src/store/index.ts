@@ -62,6 +62,13 @@ export function isMixCardComplete(c: MixCard): boolean {
   return c.base != null && c.ingredients.length > 0
 }
 
+/** 目前正在填哪張卡的哪一格(主音軌 / 混入);點軌道會填進這裡 */
+export type MixSlotKind = 'base' | 'ingredient'
+export interface MixSlot {
+  cardId: string
+  kind: MixSlotKind
+}
+
 function sameMixTrack(a: MixTrackRef, b: MixTrackRef): boolean {
   return a.path === b.path && a.track === b.track
 }
@@ -101,6 +108,12 @@ function pruneMixCardRefs(cards: MixCard[], path: string): MixCard[] {
   }))
 }
 
+/** 作用中的區塊若所屬卡片已不存在,退回尾端空卡的主音軌格 */
+function keepMixSlot(cards: MixCard[], slot: MixSlot | null): MixSlot {
+  if (slot && cards.some((c) => c.id === slot.cardId)) return slot
+  return { cardId: cards[cards.length - 1].id, kind: 'base' }
+}
+
 export interface Toast {
   id: number
   text: string
@@ -125,7 +138,8 @@ interface AppState {
   analysisTracks: Record<string, number[]>
   /** 混音卡佇列;恆有一張尾端空卡 */
   mixCards: MixCard[]
-  activeMixCardId: string
+  /** 目前作用中的區塊;點軌道會填進這格 */
+  activeMixSlot: MixSlot
 
   init: () => Promise<void>
   playSound: (soundId?: string) => void
@@ -143,11 +157,11 @@ interface AppState {
   setReplaceAudio: (path: string | null) => void
   /** 切換某檔某軌是否納入分析(allTracks = 該檔全部軌序,供預設值) */
   toggleAnalysisTrack: (path: string, track: number, allTracks: number[]) => void
-  setMixCardActive: (id: string) => void
+  setMixActiveSlot: (cardId: string, kind: MixSlotKind) => void
   /**
-   * 點選音軌卡片:指派給目前作用中的混音卡。已是該卡的湯底/材料則取消指派;
-   * 尚未指派且該卡缺湯底則設為湯底,否則加入材料。一軌同時只能是一張卡的湯底
-   * (指派給新卡會從原本的卡搶走)。
+   * 點選音軌:填進目前作用中的區塊。作用中是主音軌格 → 設為該卡主音軌(已是則取消;
+   * 一軌同時只能是一張卡的主音軌,指派會從原卡搶走);填入空的主音軌格後自動把作用中
+   * 移到同卡的混入格。作用中是混入格 → 加入/移除該軌(不可與同卡主音軌重複)。
    */
   mixToggleTrack: (path: string, track: number) => void
   mixRemoveRef: (cardId: string, kind: 'base' | 'ingredient', ref: MixTrackRef) => void
@@ -175,7 +189,7 @@ export const useApp = create<AppState>((set, get) => ({
   replaceAudio: null,
   analysisTracks: {},
   mixCards: [initialMixCard],
-  activeMixCardId: initialMixCard.id,
+  activeMixSlot: { cardId: initialMixCard.id, kind: 'base' },
 
   init: async () => {
     const settings = await window.api.getSettings()
@@ -272,14 +286,11 @@ export const useApp = create<AppState>((set, get) => ({
         delete analysisTracks[item.path]
         mixCards = normalizeMixCards(pruneMixCardRefs(s.mixCards, item.path))
       }
-      const activeMixCardId = mixCards.some((c) => c.id === s.activeMixCardId)
-        ? s.activeMixCardId
-        : mixCards[mixCards.length - 1].id
       return {
         source: s.source.filter((it) => it.id !== id),
         analysisTracks,
         mixCards,
-        activeMixCardId,
+        activeMixSlot: keepMixSlot(mixCards, s.activeMixSlot),
         // 被移除的正是選中的新音軌 → 一併清掉
         replaceAudio: item && item.path === s.replaceAudio ? null : s.replaceAudio
       }
@@ -294,10 +305,7 @@ export const useApp = create<AppState>((set, get) => ({
       const mixCards = item
         ? normalizeMixCards(pruneMixCardRefs(s.mixCards, item.path))
         : s.mixCards
-      const activeMixCardId = mixCards.some((c) => c.id === s.activeMixCardId)
-        ? s.activeMixCardId
-        : mixCards[mixCards.length - 1].id
-      return { source: next, mixCards, activeMixCardId }
+      return { source: next, mixCards, activeMixSlot: keepMixSlot(mixCards, s.activeMixSlot) }
     }),
 
   checkAll: (v) =>
@@ -308,8 +316,7 @@ export const useApp = create<AppState>((set, get) => ({
       let mixCards = s.mixCards
       for (const it of s.source) mixCards = pruneMixCardRefs(mixCards, it.path)
       mixCards = normalizeMixCards(mixCards)
-      const activeMixCardId = mixCards[mixCards.length - 1].id
-      return { source: next, mixCards, activeMixCardId }
+      return { source: next, mixCards, activeMixSlot: keepMixSlot(mixCards, s.activeMixSlot) }
     }),
 
   clearSource: () => {
@@ -320,7 +327,7 @@ export const useApp = create<AppState>((set, get) => ({
       replaceAudio: null,
       analysisTracks: {},
       mixCards: [fresh],
-      activeMixCardId: fresh.id
+      activeMixSlot: { cardId: fresh.id, kind: 'base' }
     })
   },
 
@@ -362,47 +369,56 @@ export const useApp = create<AppState>((set, get) => ({
       return { analysisTracks: { ...s.analysisTracks, [path]: next } }
     }),
 
-  setMixCardActive: (id) => set({ activeMixCardId: id }),
+  setMixActiveSlot: (cardId, kind) => set({ activeMixSlot: { cardId, kind } }),
 
   mixToggleTrack: (path, track) =>
     set((s) => {
       const ref: MixTrackRef = { path, track }
+      const slot = keepMixSlot(s.mixCards, s.activeMixSlot)
       let cards = s.mixCards.map((c) => ({ ...c, ingredients: [...c.ingredients] }))
-      const active = cards.find((c) => c.id === s.activeMixCardId) ?? cards[cards.length - 1]
-      if (!active) return {}
+      const idx = cards.findIndex((c) => c.id === slot.cardId)
+      if (idx < 0) return {}
+      let nextSlot: MixSlot = slot
 
-      if (active.base && sameMixTrack(active.base, ref)) {
-        active.base = null
-      } else if (active.ingredients.some((i) => sameMixTrack(i, ref))) {
-        active.ingredients = active.ingredients.filter((i) => !sameMixTrack(i, ref))
-      } else if (!active.base) {
-        // 一軌同時只能是一張卡的湯底 → 從原本的卡搶走
-        cards = cards.map((c) => (c.base && sameMixTrack(c.base, ref) ? { ...c, base: null } : c))
-        cards.find((c) => c.id === active.id)!.base = ref
-      } else if (!active.ingredients.some((i) => sameMixTrack(i, ref))) {
-        active.ingredients.push(ref)
+      if (slot.kind === 'base') {
+        if (cards[idx].base && sameMixTrack(cards[idx].base!, ref)) {
+          cards[idx] = { ...cards[idx], base: null } // 再點一次 = 取消
+        } else {
+          // 一軌只能是一張卡的主音軌 → 從別張搶走
+          cards = cards.map((c) => (c.base && sameMixTrack(c.base, ref) ? { ...c, base: null } : c))
+          const wasEmpty = cards[idx].base == null
+          cards[idx] = {
+            ...cards[idx],
+            base: ref,
+            ingredients: cards[idx].ingredients.filter((i) => !sameMixTrack(i, ref))
+          }
+          // 填入空的主音軌格後,自動把作用中移到同卡的混入格(順著自然流程)
+          if (wasEmpty) nextSlot = { cardId: slot.cardId, kind: 'ingredient' }
+        }
+      } else {
+        const c = cards[idx]
+        if (c.ingredients.some((i) => sameMixTrack(i, ref))) {
+          cards[idx] = { ...c, ingredients: c.ingredients.filter((i) => !sameMixTrack(i, ref)) }
+        } else if (!(c.base && sameMixTrack(c.base, ref))) {
+          cards[idx] = { ...c, ingredients: [...c.ingredients, ref] }
+        }
       }
 
       cards = normalizeMixCards(cards)
-      const activeMixCardId = cards.some((c) => c.id === s.activeMixCardId)
-        ? s.activeMixCardId
-        : cards[cards.length - 1].id
-      return { mixCards: cards, activeMixCardId }
+      return { mixCards: cards, activeMixSlot: keepMixSlot(cards, nextSlot) }
     }),
 
   mixRemoveRef: (cardId, kind, ref) =>
     set((s) => {
-      let cards = s.mixCards.map((c) => {
-        if (c.id !== cardId) return c
-        return kind === 'base'
-          ? { ...c, base: null }
-          : { ...c, ingredients: c.ingredients.filter((i) => !sameMixTrack(i, ref)) }
-      })
-      cards = normalizeMixCards(cards)
-      const activeMixCardId = cards.some((c) => c.id === s.activeMixCardId)
-        ? s.activeMixCardId
-        : cards[cards.length - 1].id
-      return { mixCards: cards, activeMixCardId }
+      const cards = normalizeMixCards(
+        s.mixCards.map((c) => {
+          if (c.id !== cardId) return c
+          return kind === 'base'
+            ? { ...c, base: null }
+            : { ...c, ingredients: c.ingredients.filter((i) => !sameMixTrack(i, ref)) }
+        })
+      )
+      return { mixCards: cards, activeMixSlot: keepMixSlot(cards, s.activeMixSlot) }
     }),
 
   mixUpdateCard: (id, patch) =>
@@ -411,10 +427,7 @@ export const useApp = create<AppState>((set, get) => ({
   mixRemoveCard: (id) =>
     set((s) => {
       const cards = normalizeMixCards(s.mixCards.filter((c) => c.id !== id))
-      const activeMixCardId = cards.some((c) => c.id === s.activeMixCardId)
-        ? s.activeMixCardId
-        : cards[cards.length - 1].id
-      return { mixCards: cards, activeMixCardId }
+      return { mixCards: cards, activeMixSlot: keepMixSlot(cards, s.activeMixSlot) }
     }),
 
   saveSettings: async (patch) => {

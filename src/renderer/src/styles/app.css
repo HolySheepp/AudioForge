@@ -643,11 +643,41 @@
   align-items: stretch;
   gap: 14px;
 }
+/* 指示列 + 音軌列:框起來成一個明顯的「挑音軌」區,配合作用中的區塊變色 */
+.mix-picker {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+.mix-instruction {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.mix-step {
+  color: var(--accent);
+  font-weight: 700;
+}
 /* 音軌小卡:分析卡片的四分之一大小左右,只做選取用途 */
 .mix-pool {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: var(--surface-2);
+}
+/* 有作用中的區塊時,音軌列以副色描邊,提示「就是點這裡」 */
+.mix-pool.for-base,
+.mix-pool.for-ingredient {
+  border-style: solid;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .mix-track-chip {
   display: flex;
@@ -713,11 +743,6 @@
   background: var(--surface-2);
   min-width: 220px;
   max-width: 260px;
-  cursor: pointer;
-}
-.mix-card.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 .mix-card-head {
   display: flex;
@@ -727,23 +752,44 @@
 .mix-card-head b {
   font-size: 12.5px;
 }
+/* 兩個可點區塊:點了成為作用中,以副色描邊 */
 .mix-slot {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+.mix-slot:hover {
+  border-color: var(--accent);
+}
+.mix-slot.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 .mix-slot-label {
   font-size: 10.5px;
   color: var(--text-dim);
 }
+.mix-slot.active .mix-slot-label {
+  color: var(--accent);
+}
 .mix-slot-hint {
   font-size: 11px;
   color: var(--text-dim);
-  opacity: 0.75;
+  opacity: 0.85;
 }
 .mix-slot-ingredients {
-  display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
+  align-items: center;
 }
 .mix-slot-ingredients .mix-slot-label {
   width: 100%;

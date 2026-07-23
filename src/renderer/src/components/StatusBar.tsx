@@ -1,7 +1,7 @@
-import { useApp } from '../store'
+import { useApp, isMixCardComplete } from '../store'
 import { useT } from '../hooks/useT'
 import { mergedParams } from '../features/params'
-import type { JobSpec } from '../../../shared/types'
+import type { JobSpec, ToolId } from '../../../shared/types'
 import { IconPlay } from './icons'
 
 let jobSeq = 1
@@ -23,32 +23,53 @@ export function StatusBar(): React.JSX.Element {
 
   const start = (): void => {
     if (!settings) return
+
+    // 混音:每張完整的混音卡(有湯底 + 至少一個材料)各自是一個獨立 job,
+    // 跟其他功能不同,不吃 source 的勾選狀態(卡片本身就是選取單位)
+    if (tool === 'mixdown') {
+      const cards = useApp.getState().mixCards.filter(isMixCardComplete)
+      if (cards.length === 0) {
+        toast(t('toast.noMixCards'))
+        return
+      }
+      const pathToItemId = new Map(source.map((it) => [it.path, it.id]))
+      for (const c of cards) {
+        const spec: JobSpec = {
+          jobId: `j${Date.now()}-${jobSeq++}`,
+          itemId: `mix-${c.id}`,
+          tool,
+          path: c.base!.path,
+          params: {
+            base: c.base,
+            ingredients: c.ingredients,
+            autoLevel: c.autoLevel,
+            limiter: c.limiter,
+            duration: c.duration,
+            format: c.format,
+            sampleRate: c.sampleRate
+          }
+        }
+        // 涉及的每個來源檔都跟著顯示狀態/進度,不只湯底那一列
+        const paths = new Set([c.base!.path, ...c.ingredients.map((i) => i.path)])
+        const groupIds = [...paths]
+          .map((p) => pathToItemId.get(p))
+          .filter((x): x is string => Boolean(x))
+        void startJobs([spec], groupIds)
+      }
+      toast(t('toast.jobsStarted', { n: cards.length }))
+      return
+    }
+
     if (checked.length === 0) {
       toast(t('toast.noChecked'))
       return
     }
 
-    const params = mergedParams<Record<string, unknown>>(tool, settings.toolParams)
+    const params = mergedParams<Record<string, unknown>>(
+      tool as Exclude<ToolId, 'mixdown'>,
+      settings.toolParams
+    )
     let candidates = checked
-
-    // 混音合併:單一 job 吃整批已勾選的音訊檔
-    if (tool === 'mixdown') {
-      const audios = checked.filter((it) => !it.info!.hasVideo && it.info!.audioStreams.length > 0)
-      if (audios.length < 2) {
-        toast(t('toast.needTwoAudio'))
-        return
-      }
-      const spec: JobSpec = {
-        jobId: `j${Date.now()}-${jobSeq++}`,
-        itemId: audios[0].id,
-        tool,
-        path: audios[0].path,
-        params: { ...params, inputPaths: audios.map((a) => a.path) }
-      }
-      void startJobs([spec], audios.map((a) => a.id))
-      toast(t('toast.jobsStarted', { n: 1 }))
-      return
-    }
 
     if (tool === 'replace') {
       candidates = checked.filter((it) => it.info!.hasVideo)

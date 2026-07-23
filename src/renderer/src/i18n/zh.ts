@@ -22,7 +22,7 @@ export const zh = {
   'tool.convert': '音訊轉檔',
   'tool.convert.desc': 'WAV / MP3 / AAC / FLAC',
   'tool.mixdown': '混音合併',
-  'tool.mixdown.desc': '把多個音訊混成單一音軌',
+  'tool.mixdown.desc': '把「湯底」音軌與其他音軌混在一起',
 
   // 來源欄
   'source.title': '來源檔案',
@@ -79,7 +79,15 @@ export const zh = {
   'param.mixdown.duration.longest': '以最長的輸入為準',
   'param.mixdown.duration.shortest': '以最短的輸入為準',
   'param.mixdown.autoLevel': '自動平衡音量',
-  'toast.needTwoAudio': '請勾選至少兩個音訊檔',
+  'toast.noMixCards': '至少要有一張混音卡有湯底跟材料',
+  'mixdown.empty': '把檔案或資料夾拖到這裡,再從下方選音軌組成混音卡',
+  'mixdown.base': '湯底',
+  'mixdown.ingredients': '材料',
+  'mixdown.pickBase': '點選下方音軌設為湯底',
+  'mixdown.pickIngredient': '點選下方音軌加入',
+  'mixdown.cardTitle': '混音卡 {n}',
+  'mixdown.baseBadge': '卡{n}湯底',
+  'mixdown.ingredientBadge': '卡{n}材料',
 
   // 參數:抽取
   'param.extract.mode': '輸出格式',

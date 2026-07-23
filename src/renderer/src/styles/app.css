@@ -637,6 +637,150 @@
   color: var(--text-dim);
 }
 
+/* ===== 混音面板 ===== */
+.mixdown-panel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+/* 音軌小卡:分析卡片的四分之一大小左右,只做選取用途 */
+.mix-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mix-track-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 5px 8px;
+  min-width: 64px;
+  max-width: 130px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: left;
+}
+.mix-track-chip:hover {
+  border-color: var(--accent);
+}
+.mix-track-chip.assigned {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.mtc-name {
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.mtc-track {
+  font-size: 9.5px;
+  color: var(--text-dim);
+}
+.mtc-badge {
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 999px;
+  line-height: 1.5;
+}
+.mtc-badge.base {
+  background: var(--accent);
+  color: #fff;
+}
+.mtc-badge.ing {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.mix-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mix-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  min-width: 220px;
+  max-width: 260px;
+  cursor: pointer;
+}
+.mix-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.mix-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mix-card-head b {
+  font-size: 12.5px;
+}
+.mix-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mix-slot-label {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+.mix-slot-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+.mix-slot-ingredients {
+  display: flex;
+  flex-wrap: wrap;
+}
+.mix-slot-ingredients .mix-slot-label {
+  width: 100%;
+}
+.mix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  margin: 2px 4px 0 0;
+  font-size: 11px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  color: var(--text);
+}
+.mix-chip button {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  line-height: 1;
+}
+.mix-chip button:hover {
+  color: var(--danger);
+}
+.mix-card-params {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  cursor: default;
+}
+
 /* 設定:響度分析頁 */
 .field-label {
   font-size: 12px;

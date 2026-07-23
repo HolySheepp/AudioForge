@@ -43,13 +43,22 @@ async function measureLufs(path: string): Promise<number> {
   return r ? r.integrated : NaN
 }
 
-/** 跑一個 job 並等它結束 */
+/**
+ * 跑一個 job 並等它結束。queue.setOnUpdate 是單一全域 callback,若每次 runJob 都
+ * 各自呼叫一次,平行呼叫(Promise.all)時後面的呼叫會覆蓋前面的 handler,導致
+ * 先發的 job 完成時沒人接住、永遠不 resolve——所以改成只裝一次共用 dispatcher,
+ * 依 jobId 分派給對應的 resolver。
+ */
+const pendingJobs = new Map<string, (u: JobUpdate) => void>()
+queue.setOnUpdate((u) => {
+  if (u.status === 'done' || u.status === 'failed' || u.status === 'cancelled') {
+    pendingJobs.get(u.jobId)?.(u)
+    pendingJobs.delete(u.jobId)
+  }
+})
 function runJob(spec: JobSpec): Promise<JobUpdate> {
   return new Promise((resolve) => {
-    queue.setOnUpdate((u) => {
-      if (u.jobId !== spec.jobId) return
-      if (u.status === 'done' || u.status === 'failed' || u.status === 'cancelled') resolve(u)
-    })
+    pendingJobs.set(spec.jobId, resolve)
     queue.enqueue([spec])
   })
 }
@@ -96,6 +105,7 @@ export async function runSmoke(): Promise<void> {
     twoTrackAudio
   ])
   check('test media generated', existsSync(wavA) && existsSync(video) && existsSync(twoTrackAudio))
+  const srcInfo = await probeFile(video)
 
   // ---- 1. analysis(單軌 + 影片雙軌逐軌)----
   const a1 = await runJob(spec('analysis', wavA, {}))
@@ -181,10 +191,11 @@ export async function runSmoke(): Promise<void> {
     check('convert per-track has no video', !info.hasVideo)
   }
 
-  // ---- 4.5 mixdown(兩個 wav 混成一軌)----
+  // ---- 4.5 mixdown 卡片制:湯底是純音訊檔 → 輸出新音訊檔 ----
   const mx = await runJob(
     spec('mixdown', wavA, {
-      inputPaths: [wavA, wavB],
+      base: { path: wavA, track: 0 },
+      ingredients: [{ path: wavB, track: 0 }],
       format: 'wav',
       autoLevel: false,
       duration: 'longest',
@@ -192,13 +203,61 @@ export async function runSmoke(): Promise<void> {
       limiter: true
     })
   )
-  check('mixdown job', mx.status === 'done', mx.errorTail ?? '')
+  check('mixdown audio-base job', mx.status === 'done', mx.errorTail ?? '')
   if (mx.outputs?.[0]) {
     const info = await probeFile(mx.outputs[0])
     check('mixdown stereo', info.audioStreams[0]?.channels === 2)
     check('mixdown wav 24-bit', info.audioStreams[0]?.codec === 'pcm_s24le', info.audioStreams[0]?.codec)
     check('mixdown keeps sample rate', info.audioStreams[0]?.sampleRate === 48000)
   }
+
+  // ---- 4.6 mixdown 湯底是影片的音軌 → 輸出維持影片,只有那條軌被取代 ----
+  const mv = await runJob(
+    spec('mixdown', video, {
+      base: { path: video, track: 0 },
+      ingredients: [{ path: wavB, track: 0 }],
+      autoLevel: false,
+      duration: 'longest',
+      limiter: true
+    })
+  )
+  check('mixdown video-base job', mv.status === 'done', mv.errorTail ?? '')
+  if (mv.outputs?.[0]) {
+    const info = await probeFile(mv.outputs[0])
+    check('mixdown video-base keeps video', info.hasVideo && info.videoCodec === srcInfo.videoCodec)
+    check('mixdown video-base keeps 2 tracks', info.audioStreams.length === 2, `${info.audioStreams.length}`)
+    check(
+      'mixdown video-base duration ≈ video',
+      Math.abs((info.durationSec ?? 0) - (srcInfo.durationSec ?? 0)) < 0.5
+    )
+  }
+
+  // 同一部影片的兩條不同軌,分別當不同混音卡的湯底,平行跑 → 輸出檔名須靠軌號避免撞名
+  const [mv0, mv1] = await Promise.all([
+    runJob(
+      spec('mixdown', video, {
+        base: { path: video, track: 0 },
+        ingredients: [{ path: wavA, track: 0 }],
+        duration: 'longest',
+        limiter: true
+      })
+    ),
+    runJob(
+      spec('mixdown', video, {
+        base: { path: video, track: 1 },
+        ingredients: [{ path: wavB, track: 0 }],
+        duration: 'longest',
+        limiter: true
+      })
+    )
+  ])
+  check('mixdown parallel same-file job1', mv0.status === 'done', mv0.errorTail ?? '')
+  check('mixdown parallel same-file job2', mv1.status === 'done', mv1.errorTail ?? '')
+  check(
+    'mixdown parallel outputs distinct',
+    Boolean(mv0.outputs?.[0]) && Boolean(mv1.outputs?.[0]) && mv0.outputs![0] !== mv1.outputs![0],
+    `${mv0.outputs?.[0]} vs ${mv1.outputs?.[0]}`
+  )
 
   // ---- 4.7 純音訊多軌逐軌 normalize(separate,保留兩軌)----
   const ma = await runJob(
@@ -218,7 +277,6 @@ export async function runSmoke(): Promise<void> {
   }
 
   // ---- 5. replace(keepVideo,畫面流 copy)----
-  const srcInfo = await probeFile(video)
   const r1 = await runJob(
     spec('replace', video, {
       replaceAudioPath: wavB,

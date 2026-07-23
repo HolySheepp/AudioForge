@@ -97,35 +97,22 @@ export interface AnalysisParams {
 }
 export const ANALYSIS_DEFAULTS: AnalysisParams = { tracks: [0] }
 
-/** 混音合併(跨檔案,與逐軌無關) */
-export interface MixdownParams {
-  format: 'wav' | 'mp3' | 'aac' | 'flac'
-  /** amix normalize:自動衰減避免爆音;關閉則保留各檔原音量 */
-  autoLevel: boolean
-  duration: 'longest' | 'shortest'
-  /** 0 = 跟隨第一個輸入 */
-  sampleRate: 0 | 44100 | 48000 | 96000
-  limiter: boolean
-}
-export const MIXDOWN_DEFAULTS: MixdownParams = {
-  format: 'wav',
-  autoLevel: false,
-  duration: 'longest',
-  sampleRate: 0,
-  limiter: true
-}
+// 混音改成卡片制(store 的 mixCards),每張卡自帶參數,不走這裡的
+// mergedParams/toolParams 記憶機制——沒有「上次用過的單一組參數」這種東西。
 
-const DEFAULTS: Record<ToolId, Record<string, unknown>> = {
+const DEFAULTS: Record<Exclude<ToolId, 'mixdown'>, Record<string, unknown>> = {
   analysis: ANALYSIS_DEFAULTS as unknown as Record<string, unknown>,
   normalize: NORMALIZE_DEFAULTS as unknown as Record<string, unknown>,
   replace: REPLACE_DEFAULTS as unknown as Record<string, unknown>,
   extract: EXTRACT_DEFAULTS as unknown as Record<string, unknown>,
-  convert: CONVERT_DEFAULTS as unknown as Record<string, unknown>,
-  mixdown: MIXDOWN_DEFAULTS as unknown as Record<string, unknown>
+  convert: CONVERT_DEFAULTS as unknown as Record<string, unknown>
 }
 
-/** 上次參數(settings.toolParams)疊在預設值上 */
-export function mergedParams<T>(tool: ToolId, saved: Record<string, Record<string, unknown>>): T {
+/** 上次參數(settings.toolParams)疊在預設值上;不適用於 mixdown(見上方註解) */
+export function mergedParams<T>(
+  tool: Exclude<ToolId, 'mixdown'>,
+  saved: Record<string, Record<string, unknown>>
+): T {
   return { ...DEFAULTS[tool], ...(saved[tool] ?? {}) } as T
 }
 

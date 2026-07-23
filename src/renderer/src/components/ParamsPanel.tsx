@@ -10,7 +10,6 @@ import {
   padTracks,
   type ConvertParams,
   type ExtractParams,
-  type MixdownParams,
   type NormalizeParams,
   type NormalizeTrackCfg,
   type ReplaceParams
@@ -49,8 +48,8 @@ function PanelFor({ tool }: { tool: ToolId }): React.JSX.Element {
   }
 }
 
-/** 讀上次參數 + 寫回 settings 的共用 hook */
-function useToolParams<T>(tool: ToolId): [T, (patch: Partial<T>) => void] {
+/** 讀上次參數 + 寫回 settings 的共用 hook(mixdown 走卡片制,不適用) */
+function useToolParams<T>(tool: Exclude<ToolId, 'mixdown'>): [T, (patch: Partial<T>) => void] {
   const saved = useApp((s) => s.settings?.toolParams ?? {})
   const saveToolParams = useApp((s) => s.saveToolParams)
   const [params, setParams] = useState<T>(() => mergedParams<T>(tool, saved))
@@ -479,59 +478,228 @@ function ExtractPanel(): React.JSX.Element {
   )
 }
 
+/**
+ * 混音:湯底(base)+ 材料(ingredients)卡片制。
+ *
+ * 上方是所有已勾選檔案的音軌小卡(可跨檔案、跨影片/音訊選取);下方是混音卡佇列,
+ * 恆有一張尾端空卡待填。點軌道小卡 = 指派給「目前作用中」的混音卡(未滿湯底先填
+ * 湯底,已有湯底則加材料;已指派的再點一次 = 取消)。點混音卡本體切換哪張是作用中。
+ *
+ * 湯底決定輸出:屬於影片 → 輸出整部影片(該軌被取代,其餘原封不動,無格式選項);
+ * 屬於純音訊檔 → 輸出新音訊檔,此時才顯示格式/取樣率選項。
+ */
 function MixdownPanel(): React.JSX.Element {
   const t = useT()
-  const [p, update] = useToolParams<MixdownParams>('mixdown')
+  const source = useApp((s) => s.source)
+  const mixCards = useApp((s) => s.mixCards)
+  const activeMixCardId = useApp((s) => s.activeMixCardId)
+  const setMixCardActive = useApp((s) => s.setMixCardActive)
+  const mixToggleTrack = useApp((s) => s.mixToggleTrack)
+  const mixRemoveRef = useApp((s) => s.mixRemoveRef)
+  const mixUpdateCard = useApp((s) => s.mixUpdateCard)
+  const mixRemoveCard = useApp((s) => s.mixRemoveCard)
+
+  const files = source.filter((it) => it.checked && it.info && it.info.audioStreams.length > 0)
+  const multiFile = files.length > 1
+
+  const pathToItem = new Map(files.map((it) => [it.path, it]))
+  const roleOf = (path: string, track: number): { baseOf: number; ingredientOf: number[] } => {
+    let baseOf = -1
+    const ingredientOf: number[] = []
+    mixCards.forEach((c, i) => {
+      if (c.base && c.base.path === path && c.base.track === track) baseOf = i
+      if (c.ingredients.some((r) => r.path === path && r.track === track)) ingredientOf.push(i)
+    })
+    return { baseOf, ingredientOf }
+  }
+
+  const label = (ref: { path: string; track: number }): string => {
+    const item = pathToItem.get(ref.path)
+    const streams = item?.info?.audioStreams.length ?? 0
+    const name = item?.info?.name ?? ref.path
+    return streams > 1 ? `${name} · ${t('param.track', { n: ref.track + 1 })}` : name
+  }
+
+  if (files.length === 0) {
+    return (
+      <div className="panel-inner">
+        <p className="panel-hint">{t('mixdown.empty')}</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="panel-inner">
-      <label className="field">
-        <span>{t('param.convert.format')}</span>
-        <select value={p.format} onChange={(e) => update({ format: e.target.value as MixdownParams['format'] })}>
-          <option value="wav">WAV (24-bit)</option>
-          <option value="mp3">MP3 320k</option>
-          <option value="aac">AAC 256k (.m4a)</option>
-          <option value="flac">FLAC</option>
-        </select>
-      </label>
-      <label className="field">
-        <span>{t('param.mixdown.duration')}</span>
-        <select
-          value={p.duration}
-          onChange={(e) => update({ duration: e.target.value as MixdownParams['duration'] })}
-        >
-          <option value="longest">{t('param.mixdown.duration.longest')}</option>
-          <option value="shortest">{t('param.mixdown.duration.shortest')}</option>
-        </select>
-      </label>
-      <label className="field">
-        <span>{t('param.convert.sampleRate')}</span>
-        <select
-          value={p.sampleRate}
-          onChange={(e) => update({ sampleRate: Number(e.target.value) as MixdownParams['sampleRate'] })}
-        >
-          <option value={0}>{t('param.convert.keepSr')}</option>
-          <option value={44100}>44.1 kHz</option>
-          <option value={48000}>48 kHz</option>
-          <option value={96000}>96 kHz</option>
-        </select>
-      </label>
-      <div className="field">
-        <label className="check-inline">
-          <input
-            type="checkbox"
-            checked={p.autoLevel}
-            onChange={(e) => update({ autoLevel: e.target.checked })}
-          />
-          {t('param.mixdown.autoLevel')}
-        </label>
-        <label className="check-inline">
-          <input
-            type="checkbox"
-            checked={p.limiter}
-            onChange={(e) => update({ limiter: e.target.checked })}
-          />
-          {t('param.mt.limiter')}
-        </label>
+    <div className="panel-inner mixdown-panel">
+      <div className="mix-pool">
+        {files.flatMap((it) =>
+          it.info!.audioStreams.map((st, i) => {
+            const { baseOf, ingredientOf } = roleOf(it.path, i)
+            const assigned = baseOf >= 0 || ingredientOf.length > 0
+            return (
+              <button
+                key={`${it.path}#${i}`}
+                className={`mix-track-chip${assigned ? ' assigned' : ''}${baseOf >= 0 ? ' is-base' : ''}`}
+                onClick={() => mixToggleTrack(it.path, i)}
+                title={`${it.info!.name} · ${t('param.track', { n: i + 1 })} · ${st.codec}`}
+              >
+                <span className="mtc-name">
+                  {multiFile ? it.info!.name : t('param.track', { n: i + 1 })}
+                </span>
+                {it.info!.audioStreams.length > 1 && multiFile && (
+                  <span className="mtc-track">{t('param.track', { n: i + 1 })}</span>
+                )}
+                {baseOf >= 0 && (
+                  <span className="mtc-badge base">{t('mixdown.baseBadge', { n: baseOf + 1 })}</span>
+                )}
+                {ingredientOf.map((ci) => (
+                  <span key={ci} className="mtc-badge ing">
+                    {t('mixdown.ingredientBadge', { n: ci + 1 })}
+                  </span>
+                ))}
+              </button>
+            )
+          })
+        )}
+      </div>
+
+      <div className="mix-cards">
+        {mixCards.map((card, i) => {
+          const baseItem = card.base ? pathToItem.get(card.base.path) : undefined
+          const baseIsVideo = Boolean(baseItem?.info?.hasVideo)
+          const isActive = card.id === activeMixCardId
+          const canRemove = card.base != null || card.ingredients.length > 0
+
+          return (
+            <div
+              key={card.id}
+              className={`mix-card${isActive ? ' active' : ''}`}
+              onClick={() => setMixCardActive(card.id)}
+            >
+              <div className="mix-card-head">
+                <b>{t('mixdown.cardTitle', { n: i + 1 })}</b>
+                {canRemove && (
+                  <button
+                    className="row-x"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      mixRemoveCard(card.id)
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="mix-slot mix-slot-base">
+                <span className="mix-slot-label">{t('mixdown.base')}</span>
+                {card.base ? (
+                  <span className="mix-chip">
+                    {label(card.base)}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        mixRemoveRef(card.id, 'base', card.base!)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ) : (
+                  <span className="mix-slot-hint">{t('mixdown.pickBase')}</span>
+                )}
+              </div>
+
+              <div className="mix-slot mix-slot-ingredients">
+                <span className="mix-slot-label">{t('mixdown.ingredients')}</span>
+                {card.ingredients.length === 0 && (
+                  <span className="mix-slot-hint">{t('mixdown.pickIngredient')}</span>
+                )}
+                {card.ingredients.map((ref) => (
+                  <span key={`${ref.path}#${ref.track}`} className="mix-chip">
+                    {label(ref)}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        mixRemoveRef(card.id, 'ingredient', ref)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              {card.base && (
+                <div className="mix-card-params" onClick={(e) => e.stopPropagation()}>
+                  <label className="check-inline">
+                    <input
+                      type="checkbox"
+                      checked={card.autoLevel}
+                      onChange={(e) => mixUpdateCard(card.id, { autoLevel: e.target.checked })}
+                    />
+                    {t('param.mixdown.autoLevel')}
+                  </label>
+                  <label className="check-inline">
+                    <input
+                      type="checkbox"
+                      checked={card.limiter}
+                      onChange={(e) => mixUpdateCard(card.id, { limiter: e.target.checked })}
+                    />
+                    {t('param.mt.limiter')}
+                  </label>
+                  <label className="field">
+                    <span>{t('param.mixdown.duration')}</span>
+                    <select
+                      value={card.duration}
+                      onChange={(e) =>
+                        mixUpdateCard(card.id, { duration: e.target.value as 'longest' | 'shortest' })
+                      }
+                    >
+                      <option value="longest">{t('param.mixdown.duration.longest')}</option>
+                      <option value="shortest">{t('param.mixdown.duration.shortest')}</option>
+                    </select>
+                  </label>
+                  {!baseIsVideo && (
+                    <>
+                      <label className="field">
+                        <span>{t('param.convert.format')}</span>
+                        <select
+                          value={card.format}
+                          onChange={(e) =>
+                            mixUpdateCard(card.id, {
+                              format: e.target.value as 'wav' | 'mp3' | 'aac' | 'flac'
+                            })
+                          }
+                        >
+                          <option value="wav">WAV (24-bit)</option>
+                          <option value="mp3">MP3 320k</option>
+                          <option value="aac">AAC 256k (.m4a)</option>
+                          <option value="flac">FLAC</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>{t('param.convert.sampleRate')}</span>
+                        <select
+                          value={card.sampleRate}
+                          onChange={(e) =>
+                            mixUpdateCard(card.id, {
+                              sampleRate: Number(e.target.value) as 0 | 44100 | 48000 | 96000
+                            })
+                          }
+                        >
+                          <option value={0}>{t('param.convert.keepSr')}</option>
+                          <option value={44100}>44.1 kHz</option>
+                          <option value={48000}>48 kHz</option>
+                          <option value={96000}>96 kHz</option>
+                        </select>
+                      </label>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

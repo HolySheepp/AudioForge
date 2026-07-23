@@ -34,6 +34,73 @@ export interface ProcessedItem {
   info: MediaInfo | null
 }
 
+/** 混音卡的一格引用:某檔案的某條音軌 */
+export interface MixTrackRef {
+  path: string
+  track: number
+}
+
+/**
+ * 一張混音卡 = 一個獨立的混音工作。
+ * base(湯底)決定輸出型態:屬於影片檔案時,輸出整部影片(該軌被取代、其餘原封不動);
+ * 屬於純音訊檔案時,輸出一個新的音訊檔。ingredients(材料)混進 base 那條軌。
+ */
+export interface MixCard {
+  id: string
+  base: MixTrackRef | null
+  ingredients: MixTrackRef[]
+  autoLevel: boolean
+  limiter: boolean
+  duration: 'longest' | 'shortest'
+  /** 僅 base 為純音訊檔時使用 */
+  format: 'wav' | 'mp3' | 'aac' | 'flac'
+  /** 僅 base 為純音訊檔時使用;0 = 跟隨 base */
+  sampleRate: 0 | 44100 | 48000 | 96000
+}
+
+export function isMixCardComplete(c: MixCard): boolean {
+  return c.base != null && c.ingredients.length > 0
+}
+
+function sameMixTrack(a: MixTrackRef, b: MixTrackRef): boolean {
+  return a.path === b.path && a.track === b.track
+}
+
+function emptyMixCard(): MixCard {
+  return {
+    id: uid(),
+    base: null,
+    ingredients: [],
+    autoLevel: false,
+    limiter: true,
+    duration: 'longest',
+    format: 'wav',
+    sampleRate: 0
+  }
+}
+
+/**
+ * 維持不變式:恰有一張「完全空白」(無湯底、無材料)的卡,且必在尾端。
+ * 中間若有卡因為湯底/材料被移除而變成完全空白,直接收掉——空卡只該出現在queue最後,
+ * 代表「下一張可以開始填」的位置。
+ */
+function normalizeMixCards(cards: MixCard[]): MixCard[] {
+  let next = cards.filter(
+    (c, i) => !(c.base == null && c.ingredients.length === 0) || i === cards.length - 1
+  )
+  if (next.length === 0 || next[next.length - 1].base != null) next = [...next, emptyMixCard()]
+  return next
+}
+
+/** 移除所有卡對某路徑的引用(檔案被移除/取消勾選時呼叫) */
+function pruneMixCardRefs(cards: MixCard[], path: string): MixCard[] {
+  return cards.map((c) => ({
+    ...c,
+    base: c.base && c.base.path === path ? null : c.base,
+    ingredients: c.ingredients.filter((i) => i.path !== path)
+  }))
+}
+
 export interface Toast {
   id: number
   text: string
@@ -56,6 +123,9 @@ interface AppState {
   replaceAudio: string | null
   /** 響度分析:各來源檔要分析的軌序(path → 軌序陣列);無此鍵 = 全部軌 */
   analysisTracks: Record<string, number[]>
+  /** 混音卡佇列;恆有一張尾端空卡 */
+  mixCards: MixCard[]
+  activeMixCardId: string
 
   init: () => Promise<void>
   playSound: (soundId?: string) => void
@@ -73,6 +143,16 @@ interface AppState {
   setReplaceAudio: (path: string | null) => void
   /** 切換某檔某軌是否納入分析(allTracks = 該檔全部軌序,供預設值) */
   toggleAnalysisTrack: (path: string, track: number, allTracks: number[]) => void
+  setMixCardActive: (id: string) => void
+  /**
+   * 點選音軌卡片:指派給目前作用中的混音卡。已是該卡的湯底/材料則取消指派;
+   * 尚未指派且該卡缺湯底則設為湯底,否則加入材料。一軌同時只能是一張卡的湯底
+   * (指派給新卡會從原本的卡搶走)。
+   */
+  mixToggleTrack: (path: string, track: number) => void
+  mixRemoveRef: (cardId: string, kind: 'base' | 'ingredient', ref: MixTrackRef) => void
+  mixUpdateCard: (id: string, patch: Partial<Omit<MixCard, 'id' | 'base' | 'ingredients'>>) => void
+  mixRemoveCard: (id: string) => void
   saveSettings: (patch: Partial<Settings>) => Promise<void>
   saveToolParams: (tool: ToolId, params: Record<string, unknown>) => void
   /** groupItemIds:單一 job 涵蓋多個來源項(mixdown)時,全部標上同一 jobId */
@@ -80,6 +160,8 @@ interface AppState {
   cancelItem: (id: string) => void
   cancelAll: () => void
 }
+
+const initialMixCard = emptyMixCard()
 
 export const useApp = create<AppState>((set, get) => ({
   tool: 'analysis',
@@ -92,6 +174,8 @@ export const useApp = create<AppState>((set, get) => ({
   toasts: [],
   replaceAudio: null,
   analysisTracks: {},
+  mixCards: [initialMixCard],
+  activeMixCardId: initialMixCard.id,
 
   init: async () => {
     const settings = await window.api.getSettings()
@@ -181,14 +265,21 @@ export const useApp = create<AppState>((set, get) => ({
   removeSource: (id) =>
     set((s) => {
       const item = s.source.find((it) => it.id === id)
-      // 該檔沒有別的列共用路徑時,才清掉它的分析軌選擇
+      // 該檔沒有別的列共用路徑時,才清掉它在分析/混音卡的引用
       const analysisTracks = { ...s.analysisTracks }
+      let mixCards = s.mixCards
       if (item && !s.source.some((it) => it.id !== id && it.path === item.path)) {
         delete analysisTracks[item.path]
+        mixCards = normalizeMixCards(pruneMixCardRefs(s.mixCards, item.path))
       }
+      const activeMixCardId = mixCards.some((c) => c.id === s.activeMixCardId)
+        ? s.activeMixCardId
+        : mixCards[mixCards.length - 1].id
       return {
         source: s.source.filter((it) => it.id !== id),
         analysisTracks,
+        mixCards,
+        activeMixCardId,
         // 被移除的正是選中的新音軌 → 一併清掉
         replaceAudio: item && item.path === s.replaceAudio ? null : s.replaceAudio
       }
@@ -197,17 +288,41 @@ export const useApp = create<AppState>((set, get) => ({
   setChecked: (id, v) =>
     set((s) => {
       const next = s.source.map((it) => (it.id === id ? { ...it, checked: v } : it))
-      return { source: v ? exclusive(next, id, s.tool) : next }
+      if (v) return { source: exclusive(next, id, s.tool) }
+      // 取消勾選:該檔的音軌從混音卡的可選池消失,連帶清掉引用它的指派
+      const item = s.source.find((it) => it.id === id)
+      const mixCards = item
+        ? normalizeMixCards(pruneMixCardRefs(s.mixCards, item.path))
+        : s.mixCards
+      const activeMixCardId = mixCards.some((c) => c.id === s.activeMixCardId)
+        ? s.activeMixCardId
+        : mixCards[mixCards.length - 1].id
+      return { source: next, mixCards, activeMixCardId }
     }),
 
   checkAll: (v) =>
     set((s) => {
       const next = s.source.map((it) => ({ ...it, checked: v && !it.probeFailed }))
-      // 全選是批次意圖 → 多軌檔讓位
-      return { source: v ? exclusive(next, null, s.tool) : next }
+      if (v) return { source: exclusive(next, null, s.tool) } // 全選是批次意圖 → 多軌檔讓位
+      // 全不選:混音卡池清空,所有引用一併清掉
+      let mixCards = s.mixCards
+      for (const it of s.source) mixCards = pruneMixCardRefs(mixCards, it.path)
+      mixCards = normalizeMixCards(mixCards)
+      const activeMixCardId = mixCards[mixCards.length - 1].id
+      return { source: next, mixCards, activeMixCardId }
     }),
 
-  clearSource: () => set({ source: [], selectedPath: null, replaceAudio: null, analysisTracks: {} }),
+  clearSource: () => {
+    const fresh = emptyMixCard()
+    set({
+      source: [],
+      selectedPath: null,
+      replaceAudio: null,
+      analysisTracks: {},
+      mixCards: [fresh],
+      activeMixCardId: fresh.id
+    })
+  },
 
   moveToSource: (processedId) => {
     const { processed, source } = get()
@@ -245,6 +360,61 @@ export const useApp = create<AppState>((set, get) => ({
         ? cur.filter((n) => n !== track)
         : [...cur, track].sort((a, b) => a - b)
       return { analysisTracks: { ...s.analysisTracks, [path]: next } }
+    }),
+
+  setMixCardActive: (id) => set({ activeMixCardId: id }),
+
+  mixToggleTrack: (path, track) =>
+    set((s) => {
+      const ref: MixTrackRef = { path, track }
+      let cards = s.mixCards.map((c) => ({ ...c, ingredients: [...c.ingredients] }))
+      const active = cards.find((c) => c.id === s.activeMixCardId) ?? cards[cards.length - 1]
+      if (!active) return {}
+
+      if (active.base && sameMixTrack(active.base, ref)) {
+        active.base = null
+      } else if (active.ingredients.some((i) => sameMixTrack(i, ref))) {
+        active.ingredients = active.ingredients.filter((i) => !sameMixTrack(i, ref))
+      } else if (!active.base) {
+        // 一軌同時只能是一張卡的湯底 → 從原本的卡搶走
+        cards = cards.map((c) => (c.base && sameMixTrack(c.base, ref) ? { ...c, base: null } : c))
+        cards.find((c) => c.id === active.id)!.base = ref
+      } else if (!active.ingredients.some((i) => sameMixTrack(i, ref))) {
+        active.ingredients.push(ref)
+      }
+
+      cards = normalizeMixCards(cards)
+      const activeMixCardId = cards.some((c) => c.id === s.activeMixCardId)
+        ? s.activeMixCardId
+        : cards[cards.length - 1].id
+      return { mixCards: cards, activeMixCardId }
+    }),
+
+  mixRemoveRef: (cardId, kind, ref) =>
+    set((s) => {
+      let cards = s.mixCards.map((c) => {
+        if (c.id !== cardId) return c
+        return kind === 'base'
+          ? { ...c, base: null }
+          : { ...c, ingredients: c.ingredients.filter((i) => !sameMixTrack(i, ref)) }
+      })
+      cards = normalizeMixCards(cards)
+      const activeMixCardId = cards.some((c) => c.id === s.activeMixCardId)
+        ? s.activeMixCardId
+        : cards[cards.length - 1].id
+      return { mixCards: cards, activeMixCardId }
+    }),
+
+  mixUpdateCard: (id, patch) =>
+    set((s) => ({ mixCards: s.mixCards.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
+
+  mixRemoveCard: (id) =>
+    set((s) => {
+      const cards = normalizeMixCards(s.mixCards.filter((c) => c.id !== id))
+      const activeMixCardId = cards.some((c) => c.id === s.activeMixCardId)
+        ? s.activeMixCardId
+        : cards[cards.length - 1].id
+      return { mixCards: cards, activeMixCardId }
     }),
 
   saveSettings: async (patch) => {
